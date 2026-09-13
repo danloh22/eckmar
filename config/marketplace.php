@@ -26,7 +26,7 @@ return [
     /**
      * Market fee percent out of 100, must be from 0 to 95
      */
-    'market_fee_percent' => env('MARKET_FEE_PERCENT', 5),
+    'market_fee_percent' => env('MARKET_FEE_PERCENT', 3),
 
     /**
      * Amount of USD that needs to be paid to the market in order to become vendor
@@ -70,7 +70,7 @@ return [
     /**
      * How many days from marking purchase as sent passed to the point of automaticly marking purchase as delivered and releasing the funds to the vendor
      */
-    'days_old_purchases' => intval(env("PURCHASES_DAYS_OLD", 60)),
+    'days_old_purchases' => intval(env("PURCHASES_DAYS_OLD", 14)),
 
     /**
      * Coins for seeder

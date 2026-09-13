@@ -7,6 +7,10 @@
 Route::prefix('profile')->group(function(){
 
     Route::get('index','ProfileController@index')->name('profile.index');
+    Route::get('wallet', 'WalletController@index')->name('profile.wallet');
+    Route::post('wallet/{coin}/address', 'WalletController@createDepositAddress')->name('profile.wallet.address.create');
+    Route::post('wallet/{coin}/withdrawals', 'WalletController@requestWithdrawal')->name('profile.wallet.withdrawals.create');
+    Route::post('wallet/pin', 'WalletController@setWithdrawalPin')->name('profile.wallet.pin');
     Route::post('changepassword', 'ProfileController@changePassword')-> name('profile.password.change'); // change password route
     Route::get('2fa/{turn}', 'ProfileController@change2fa') -> name('profile.2fa.change'); // change 2fa
 
