@@ -23,10 +23,13 @@ class BitcoinPayment implements Coin
      */
     public function __construct()
     {
-        $this -> bitcoind = new RPCWrapper(config('coins.bitcoin.username'),
-            config('coins.bitcoin.password'),
-            config('coins.bitcoin.host'),
-            config('coins.bitcoin.port'));
+        $config = config('coins.' . $this->rpcConfigKey());
+        $this -> bitcoind = new RPCWrapper($config['username'], $config['password'], $config['host'], $config['port']);
+    }
+
+    protected function rpcConfigKey(): string
+    {
+        return 'bitcoin';
     }
 
     /**
@@ -64,7 +67,7 @@ class BitcoinPayment implements Coin
     {
         // first check by address
         if(array_key_exists('address', $params))
-            $accountBalance = $this -> bitcoind -> getreceivedbyaddress($params['address'], (int)config('marketplace.bitcoin.minconfirmations'));
+            $accountBalance = $this -> bitcoind -> getreceivedbyaddress($params['address'], (int)config('coins.wallet_confirmations.' . $this->coinLabel()));
 //        else if(array_key_exists('account', $params))
 //            // fetch the balance of the account if this parameter is set
 //            $accountBalance = $this -> bitcoind -> getbalance($params['account'], (int)config('marketplace.bitcoin.minconfirmations'));
@@ -109,7 +112,7 @@ class BitcoinPayment implements Coin
 //            $this -> bitcoind -> sendtoaddress($address, $amount);
 //        }
 
-        $this->bitcoind->sendmany("", $addressesAmounts, (int)config('marketplace.bitcoin.minconfirmations'));
+        $this->bitcoind->sendmany("", $addressesAmounts, (int)config('coins.wallet_confirmations.' . $this->coinLabel()));
 
 
         if ($this->bitcoind->error) {

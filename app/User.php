@@ -35,7 +35,7 @@ class User extends Authenticatable
      *
      * @var array
      */
-    public static $permissions = ['categories', 'messages', 'users', 'products', 'logs', 'disputes', 'tickets', 'vendorpurchase', 'purchases'];
+    public static $permissions = ['categories', 'messages', 'users', 'products', 'logs', 'disputes', 'tickets', 'vendorpurchase', 'purchases', 'wallets', 'withdrawals'];
     public static $permissionsLong = [
         'categories' =>'Categories',
         'messages' => 'Messages',
@@ -45,7 +45,9 @@ class User extends Authenticatable
         'disputes' => 'Disputes',
         'tickets' => 'Tickets',
         'vendorpurchase' => 'Vendor Purchases',
-        'purchases' => 'Purchases'
+        'purchases' => 'Purchases',
+        'wallets' => 'Wallets',
+        'withdrawals' => 'Withdrawals'
     ];
 
     public $incrementing = false;
@@ -234,6 +236,11 @@ class User extends Authenticatable
     public function purchases()
     {
         return $this -> hasMany(\App\Purchase::class, 'buyer_id', 'id');
+    }
+
+    public function wallets()
+    {
+        return $this->hasMany(Wallet::class);
     }
 
     /**

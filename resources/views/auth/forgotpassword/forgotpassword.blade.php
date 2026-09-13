@@ -22,7 +22,7 @@
                     </div>
                 </form>
 
-                <form method="GET" action="/forgotpassowrd/mnemonic">
+                <form method="GET" action="/forgotpassword/mnemonic">
                     <div class="form-group text-center">
                         <div class="row">
                             <button type="submit" class="btn btn-outline-primary btn-block">Mnemonic</button>

@@ -12,7 +12,7 @@ Route::middleware(['guest'])->group(function () {
     Route::get('mnemonic/show','Auth\RegisterController@showMnemonic')->name('mnemonic');
 
     Route::get('/forgotpassword', 'Auth\ForgotPasswordController@showForget');
-    Route::get('/forgotpassowrd/mnemonic', 'Auth\ForgotPasswordController@showMnemonic');
+    Route::get('/forgotpassword/mnemonic', 'Auth\ForgotPasswordController@showMnemonic');
     Route::get('/forgotpassword/pgp', 'Auth\ForgotPasswordController@showPGP');
 
     Route::post('/forgotpassword/mnemonic', 'Auth\ForgotPasswordController@resetMnemonic');
@@ -28,7 +28,6 @@ Route::post('verify', 'Auth\LoginController@postVerify') -> name('verify.post');
 
 
 Route::post('signout','Auth\LoginController@postSignOut')->name('signout.post');
-
 
 
 

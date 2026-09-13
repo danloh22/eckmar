@@ -4,6 +4,13 @@
         Index
     </a>
 
+    @hasAccess('withdrawals')
+    <a class="nav-link @isroute('admin.wallet.withdrawals') active @endisroute" href="{{ route('admin.wallet.withdrawals') }}">
+        <i class="fas fa-wallet mr-2"></i>
+        Withdrawals
+    </a>
+    @endhasAccess
+
     @hasAccess('categories')
     <a class="nav-link @isroute('admin.categories') active @endisroute" href="{{ route('admin.categories') }}">
         <i class="fas fa-list mr-2"></i>

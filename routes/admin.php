@@ -3,6 +3,10 @@
 
 Route::get('index', 'Admin\AdminController@index') -> name('admin.index');
 
+Route::get('wallet/withdrawals', 'Admin\WalletController@withdrawals')->name('admin.wallet.withdrawals');
+Route::post('wallet/withdrawals/{withdrawal}/approve', 'Admin\WalletController@approve')->name('admin.wallet.withdrawals.approve');
+Route::post('wallet/withdrawals/{withdrawal}/reject', 'Admin\WalletController@reject')->name('admin.wallet.withdrawals.reject');
+
 // Categories routes
 Route::get('categories', 'Admin\AdminController@categories') -> name('admin.categories');
 Route::post('category/new', 'Admin\AdminController@newCategory') -> name('admin.categories.new');
