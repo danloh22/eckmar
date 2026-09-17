@@ -66,6 +66,9 @@ class MoneroPayment implements Coin
      */
     public function sendToAddress(string $toAddress, float $amount) {
         $tx = $this->monero->transfer(['address' => $toAddress, 'amount' => $amount, 'priority' => 1]);
+        if (empty($tx) || (!isset($tx['tx_hash']) && !isset($tx->tx_hash))) {
+            throw new \Exception('Monero wallet RPC did not return a transaction hash.');
+        }
         return $tx;
     }
 

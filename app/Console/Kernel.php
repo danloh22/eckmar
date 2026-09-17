@@ -38,6 +38,8 @@ class Kernel extends ConsoleKernel
         // Run completing command for purchases every defined number of days
         $schedule -> command(CompletePurchaseCommand::class) -> days(config('marketplace.days_complete'));
 
+        $schedule->command('wallets:broadcast-withdrawals')->everyMinute()->withoutOverlapping();
+
     }
 
     /**

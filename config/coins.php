@@ -77,6 +77,12 @@ return [
         'ltc' => intval(env('LTC_WALLET_CONFIRMATIONS', 10)),
     ],
 
+    'atomic_decimals' => [
+        'btc' => 8,
+        'xmr' => 12,
+        'ltc' => 8,
+    ],
+
     /**
      * DASH settings
      */

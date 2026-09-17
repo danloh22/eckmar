@@ -91,11 +91,12 @@ class BitcoinPayment implements Coin
     function sendToAddress(string $toAddress, float $amount)
     {
         // call bitcoind procedure
-        $this -> bitcoind -> sendtoaddress($toAddress, $amount);
+        $transactionId = $this -> bitcoind -> sendtoaddress($toAddress, $amount);
 
         if($this -> bitcoind -> error)
             throw new \Exception("Sending to $toAddress amount $amount \n" . $this -> bitcoind -> error);
 
+        return $transactionId;
     }
 
     /**

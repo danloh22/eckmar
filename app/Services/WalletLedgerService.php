@@ -14,16 +14,16 @@ class WalletLedgerService
         return Wallet::firstOrCreate(['user_id' => $userId, 'coin' => $coin], ['status' => 'active']);
     }
 
-    public function book(Wallet $wallet, string $type, string $availableDelta, string $reservedDelta, string $referenceType, $referenceId, string $idempotencyKey, $createdBy = null, $reason = null): WalletLedgerEntry
+    public function book(Wallet $wallet, string $type, string $availableDelta, string $reservedDelta, string $referenceType, $referenceId, string $idempotencyKey, $createdBy = null, $reason = null, bool $allowFrozen = false): WalletLedgerEntry
     {
-        return DB::transaction(function () use ($wallet, $type, $availableDelta, $reservedDelta, $referenceType, $referenceId, $idempotencyKey, $createdBy, $reason) {
+        return DB::transaction(function () use ($wallet, $type, $availableDelta, $reservedDelta, $referenceType, $referenceId, $idempotencyKey, $createdBy, $reason, $allowFrozen) {
             $entry = WalletLedgerEntry::where('idempotency_key', $idempotencyKey)->first();
             if ($entry) {
                 return $entry;
             }
 
             $lockedWallet = Wallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
-            if ($lockedWallet->status !== 'active') {
+            if (!$allowFrozen && $lockedWallet->status !== 'active') {
                 throw new RequestException('Wallet is frozen.');
             }
             $newAvailable = $this->add($lockedWallet->available_atomic, $availableDelta);
