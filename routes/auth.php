@@ -11,12 +11,12 @@ Route::middleware(['guest'])->group(function () {
 
     Route::get('mnemonic/show','Auth\RegisterController@showMnemonic')->name('mnemonic');
 
-    Route::get('/forgotpassword', 'Auth\ForgotPasswordController@showForget');
-    Route::get('/forgotpassowrd/mnemonic', 'Auth\ForgotPasswordController@showMnemonic');
-    Route::get('/forgotpassword/pgp', 'Auth\ForgotPasswordController@showPGP');
+    Route::get('/forgotpassword', 'Auth\ForgotPasswordController@showForget')->name('forgotpassword');
+    Route::get('/forgotpassword/mnemonic', 'Auth\ForgotPasswordController@showMnemonic')->name('forgotpassword.mnemonic');
+    Route::get('/forgotpassword/pgp', 'Auth\ForgotPasswordController@showPGP')->name('forgotpassword.pgp');
 
-    Route::post('/forgotpassword/mnemonic', 'Auth\ForgotPasswordController@resetMnemonic');
-    Route::post('/forgotpassword/pgp', 'Auth\ForgotPasswordController@sendVerify');
+    Route::post('/forgotpassword/mnemonic', 'Auth\ForgotPasswordController@resetMnemonic')->name('forgotpassword.mnemonic.reset');
+    Route::post('/forgotpassword/pgp', 'Auth\ForgotPasswordController@sendVerify')->name('forgotpassword.pgp.verify');
 
     Route::get('/forgotpassword/pgp/verify', 'Auth\ForgotPasswordController@showVerify')->name('pgprecover');
     Route::post('/forgotpassword/pgp/verify', 'Auth\ForgotPasswordController@resetPgp')->name('resetpgp');
@@ -28,7 +28,5 @@ Route::post('verify', 'Auth\LoginController@postVerify') -> name('verify.post');
 
 
 Route::post('signout','Auth\LoginController@postSignOut')->name('signout.post');
-
-
 
 

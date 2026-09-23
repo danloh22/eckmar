@@ -57,7 +57,7 @@ class CancelPurchasesCommand extends Command
                     $this->info("Purchase #$purchaseToCancel->id successfully canceled!");
                 }
                 catch (\Exception $e){
-                    $this->warn('Cancelation failed beacuse: ' . $e->getMessage());
+                    $this->warn('Cancellation failed because: ' . $e->getMessage());
                 }
             }
         }

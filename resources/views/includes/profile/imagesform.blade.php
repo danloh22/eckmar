@@ -32,8 +32,8 @@
             <img class="card-img" src="{{ asset('storage/' . $image -> image) }}" alt="Product image">
             <div class="card-img-overlay text-center">
                 @if(!$image -> first)
-                    <a href="{{ route('profile.vendor.product.images.default', $image -> id) }}" class="btn btn-sm btn-primary">Default</a>
-                    <a href="{{ route('profile.vendor.product.images.remove', $image -> id) }}" class="btn btn-sm btn-danger"><i class="far fa-trash-alt"></i></a>
+                    <form method="POST" action="{{ route('profile.vendor.product.images.default', $image->id) }}" class="d-inline">{{ csrf_field() }}<button type="submit" class="btn btn-sm btn-primary">Default</button></form>
+                    <form method="POST" action="{{ route('profile.vendor.product.images.remove', $image->id) }}" class="d-inline">{{ csrf_field() }}<button type="submit" class="btn btn-sm btn-danger" aria-label="Remove image"><i class="far fa-trash-alt"></i></button></form>
                 @else
                     <p class="bg-white text-muted">Default picture</p>
                 @endif

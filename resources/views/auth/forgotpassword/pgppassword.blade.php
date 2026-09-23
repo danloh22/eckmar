@@ -13,7 +13,7 @@
 
                 <p>Please enter your username</p>
 
-                <form method="post" action="/forgotpassword/pgp">
+                <form method="post" action="{{ route('auth.forgotpassword.pgp.verify') }}">
                     {{ csrf_field() }}
 
                     <div class="form-group ">

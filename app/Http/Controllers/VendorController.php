@@ -78,7 +78,7 @@ class VendorController extends Controller
     {
         // authorization for editing or creating
         if(!is_null($product)) $this -> authorize('update', $product);
-        else auth() -> user() -> can('create', Product::class);
+        else $this -> authorize('create', Product::class);
     }
 
     /**
@@ -415,6 +415,8 @@ class VendorController extends Controller
     {
         $newDefaultImage = Image::find($id);
 
+        $this -> authorizeEditOrCreate(optional($newDefaultImage) -> product);
+
         if($newDefaultImage && $newDefaultImage -> exists()){
 
             $newDefaultImage -> product -> images() -> update(['first' => 0]);
@@ -456,7 +458,7 @@ class VendorController extends Controller
      */
     public function newProduct(NewProductRequest $request)
     {
-        auth() -> user() -> can('create', Product::class);
+        $this -> authorize('create', Product::class);
 
         try{
             $request -> persist();
@@ -483,6 +485,7 @@ class VendorController extends Controller
     public function confirmProductRemove($id)
     {
         $product = Product::findOrFail($id);
+        $this -> authorize('update', $product);
 
         return view('profile.product.confirmdelete', [
             'product' => $product
@@ -499,6 +502,7 @@ class VendorController extends Controller
     public function removeProduct($id)
     {
         $productToDelete = Product::findOrFail($id);
+        $this -> authorize('update', $productToDelete);
         $productToDelete -> deactivate();
 
         session() -> flash('success', 'You have successfully deleted product!');
@@ -617,6 +621,8 @@ class VendorController extends Controller
      */
     public function confirmSent(Purchase $sale)
     {
+        abort_unless($sale->isVendor(), 403);
+
         return view('profile.purchases.confirmsent', [
             'backRoute' => redirect() -> back() -> getTargetUrl(),
             'sale' => $sale
@@ -631,6 +637,8 @@ class VendorController extends Controller
      */
     public function markAsSent(Purchase $sale)
     {
+        abort_unless($sale->isVendor(), 403);
+
         try{
             $sale -> sent();
             session() -> flash('success', 'You have successfully marked sale as sent!');

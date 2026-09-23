@@ -4,8 +4,10 @@
 namespace App\Marketplace\Payment;
 
 
-use App\Marketplace\Utility\FeeCalculator;
 use App\Purchase;
+use App\Services\WalletLedgerService;
+use App\User;
+use App\Marketplace\Utility\FeeCalculator;
 use Illuminate\Support\Facades\Log;
 
 class Escrow extends Payment
@@ -18,8 +20,7 @@ class Escrow extends Payment
      */
     function purchased()
     {
-        // generate escrow address as the account pass the Purchase id
-        $this->purchase->address = $this->coin->generateAddress(['user' => $this->purchase->id]);
+        $this->purchase->address = 'wallet:' . $this->purchase->buyer_id;
     }
 
     /**
@@ -34,37 +35,11 @@ class Escrow extends Payment
      */
     function delivered()
     {
-        // fee that needs to be caluclated
-        $feeCaluclator = new FeeCalculator($this->purchase->to_pay);
-
-        // make array of receivers
-        $receiversAmounts = [
-            // vendor receiver
-            $this->purchase->vendor->user-> coinAddress($this -> coinLabel()) -> address
-                => $feeCaluclator->getBase(),
-        ];
-
-        // check if user has refered user
-        $hasReferral = $this -> purchase -> buyer -> hasReferredBy();
-
-        // set the buyer's referred by user into receivers
-        if($hasReferral){
-            $referredByUserAddress = $this -> purchase -> buyer -> referredBy -> coinAddress($this -> coinLabel()) -> address;
-
-            $receiversAmounts[$referredByUserAddress] = $feeCaluclator -> getFee($hasReferral);
+        if (!$this->isInternalWalletEscrow()) {
+            $this->sendLegacyEscrow($this->purchase->vendor->user->coinAddress($this->coinLabel())->address);
+            return;
         }
-
-
-        // send the funds to the random address of the market
-        $marketplaceAddresses = config('coins.market_addresses.' . $this -> coinLabel());
-        if (!empty($marketplaceAddresses)) {
-            $randomMarketAddress = $marketplaceAddresses[array_rand($marketplaceAddresses)];
-            $receiversAmounts[$randomMarketAddress] = $feeCaluclator->getFee($hasReferral);
-        }
-
-        // call a coin procedure to send funds
-        $this->coin->sendToMany($receiversAmounts);
-
+        app(WalletLedgerService::class)->releasePurchase($this->purchase, $this->purchase->vendor->user);
     }
 
     /**
@@ -74,29 +49,15 @@ class Escrow extends Payment
      */
     function resolved(array $parameters)
     {
-        if (!array_key_exists('receiving_address', $parameters))
-            throw new \Exception('There is no receiving address defined!');
+        if (!array_key_exists('winner_id', $parameters))
+            throw new \Exception('There is no dispute winner defined!');
 
-        // calculate fee
-        $feeCaluclator = new FeeCalculator($this->purchase->to_pay);
-
-        // make array of receivers
-        $receiversAmounts = [
-            $parameters['receiving_address'] => $feeCaluclator->getBase(),
-        ];
-
-        // send the funds to the random address
-        $marketplaceAddresses = config('coins.market_addresses.' . $this -> coinLabel());
-        if (!empty($marketplaceAddresses)) {
-            // set the market address as a receiver
-            $randomMarketAddress = $marketplaceAddresses[array_rand($marketplaceAddresses)];
-
-
-            $receiversAmounts[$randomMarketAddress] = $feeCaluclator->getFee();
+        $winner = User::findOrFail($parameters['winner_id']);
+        if (!$this->isInternalWalletEscrow()) {
+            $this->sendLegacyEscrow($winner->coinAddress($this->coinLabel())->address);
+            return;
         }
-
-        // call a coin procedure to send funds
-        $this->coin->sendToMany($receiversAmounts);
+        app(WalletLedgerService::class)->releasePurchase($this->purchase, $winner, 'dispute_release');
 
     }
 
@@ -108,7 +69,10 @@ class Escrow extends Payment
      */
     function balance(): float
     {
-        return $this->coin->getBalance(['account' => $this->purchase->id, 'address' => $this -> purchase -> address]);
+        if (!$this->isInternalWalletEscrow()) {
+            return $this->coin->getBalance(['account' => $this->purchase->id, 'address' => $this->purchase->address]);
+        }
+        return optional($this->purchase->walletEscrowHold)->status === 'active' ? (float) $this->purchase->to_pay : 0.0;
     }
 
     /**
@@ -139,34 +103,30 @@ class Escrow extends Payment
      */
     public function canceled()
     {
-        // if there is balance on the address
-        if(($balanceAddres = $this->balance()) >0){
-            // fee that needs to be caluclated
-            $feeCaluclator = new FeeCalculator($balanceAddres);
-
-            // make array of receivers
-            $receiversAmounts = [
-                // buyer receiver
-                $this->purchase->buyer-> coinAddress($this -> coinLabel()) -> address
-                    => $feeCaluclator->getBase(),
-            ];
-
-            // check if user has refered user
-            $hasReferral = false; // no referal on canceled purchases
-
-
-            // send the funds to the random address of the market
-            $marketplaceAddresses = config('coins.market_addresses.' . $this -> coinLabel());
-            if (!empty($marketplaceAddresses)) {
-                $randomMarketAddress = $marketplaceAddresses[array_rand($marketplaceAddresses)];
-                $receiversAmounts[$randomMarketAddress] = $feeCaluclator->getFee($hasReferral);
+        if (!$this->isInternalWalletEscrow()) {
+            if (($balance = $this->balance()) > 0) {
+                $this->sendLegacyEscrow($this->purchase->buyer->coinAddress($this->coinLabel())->address, $balance);
             }
-
-            // call a coin procedure to send funds to a buyer and to market
-            $this->coin->sendToMany($receiversAmounts);
-
+            return;
         }
+        app(WalletLedgerService::class)->refundPurchase($this->purchase);
 
+    }
+
+    private function isInternalWalletEscrow(): bool
+    {
+        return strpos((string) $this->purchase->address, 'wallet:') === 0;
+    }
+
+    private function sendLegacyEscrow(string $recipient, $amount = null)
+    {
+        $calculator = new FeeCalculator($amount === null ? $this->purchase->to_pay : $amount);
+        $receivers = [$recipient => $calculator->getBase()];
+        $marketAddresses = config('coins.market_addresses.' . $this->coinLabel());
+        if (!empty($marketAddresses)) {
+            $receivers[$marketAddresses[array_rand($marketAddresses)]] = $calculator->getFee();
+        }
+        $this->coin->sendToMany($receivers);
     }
 
 

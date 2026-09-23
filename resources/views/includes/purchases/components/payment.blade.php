@@ -17,7 +17,7 @@
             </td>
         </tr>
         <tr>
-            <td>Address received:</td>
+            <td>{{ strpos((string) $purchase->address, 'wallet:') === 0 ? 'Escrow reserved:' : 'Address received:' }}</td>
             <td>
                 @if($purchase -> isDelivered())
                     <span class="badge badge-success">Paid</span>
@@ -35,10 +35,17 @@
                 @endif
             </td>
         </tr>
-        <tr>
-            <td>Address:</td>
-            <td><input type="text" readonly class="form-control" value="{{ $purchase -> address }}"></td>
-        </tr>
+        @if(strpos((string) $purchase->address, 'wallet:') !== 0)
+            <tr>
+                <td>Address:</td>
+                <td><input type="text" readonly class="form-control" value="{{ $purchase -> address }}"></td>
+            </tr>
+        @else
+            <tr>
+                <td>Payment source:</td>
+                <td><span class="badge badge-primary">Internal {{ $purchase->coin_label }} wallet escrow</span></td>
+            </tr>
+        @endif
         <tr>
             <td>State</td>
             <td>
@@ -107,7 +114,7 @@
 
     {{-- Instructions for escrow --}}
     {{-- Purchased buyer--}}
-    @if($purchase -> isPurchased() && $purchase -> isBuyer() && !$purchase -> enoughBalance())
+    @if(strpos((string) $purchase->address, 'wallet:') !== 0 && $purchase -> isPurchased() && $purchase -> isBuyer() && !$purchase -> enoughBalance())
         <div class="alert alert-warning text-center">
             To proceed with purchase send the enough <em>Bitcoin</em> to the address: <span
                     class="badge badge-info">{{ $purchase -> address }}</span>
@@ -117,7 +124,7 @@
     {{-- Purchased vendor --}}
     @if($purchase -> isVendor() && $purchase -> isPurchased() && $purchase -> enoughBalance())
         <div class="alert alert-warning text-center">
-            The buyer has paid sufficient amount on the <em>Escrow</em> address. It's recommended to send the
+            The buyer's funds are reserved in <em>Escrow</em>. It's recommended to send the
             goods now!
         </div>
     @elseif($purchase -> isVendor() && $purchase -> isPurchased())
@@ -129,8 +136,7 @@
     {{-- Sent vendor --}}
     @if($purchase -> isBuyer() && $purchase -> isSent())
         <div class="alert alert-warning text-center">
-            By marking this purchase as delivered you will release the funds from the address to the vendors
-            address.
+            By marking this purchase as delivered you will release the reserved funds to the vendor's internal wallet.
         </div>
     @endif
 

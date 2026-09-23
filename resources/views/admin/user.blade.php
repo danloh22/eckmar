@@ -61,6 +61,23 @@
     </div>
 
 
+    @if(auth()->user()->isAdmin())
+        <div class="card mt-3">
+            <div class="card-header">Withdrawal security</div>
+            <div class="card-body">
+                <p class="mb-2">PIN status: <strong>{{ $user->withdrawal_pin ? 'Configured' : 'Not configured' }}</strong></p>
+                @if($user->withdrawal_pin_reset_required_at)
+                    <p class="text-warning">An administrator reset this PIN on {{ $user->withdrawal_pin_reset_required_at }}.</p>
+                @endif
+                <form method="POST" action="{{ route('admin.user.withdrawal-pin.reset', $user) }}">
+                    {{ csrf_field() }}
+                    <button type="submit" class="btn btn-outline-danger">Reset withdrawal PIN</button>
+                </form>
+            </div>
+        </div>
+    @endif
+
+
     <div class="card mt-3">
         <form action="{{route('admin.user.edit.group',$user->id)}}" method="post">
 
@@ -175,7 +192,7 @@
                             Banned until <strong>{{ $ban -> until }}</strong> ({{ \Carbon\Carbon::parse($ban->until)->diffForHumans() }})
                         </div>
                         <div class="col-md-3 text-right">
-                            <a href="{{ route('admin.ban.remove', $ban) }}" class="btn btn-outline-danger">Remove ban</a>
+                            <form method="POST" action="{{ route('admin.ban.remove', $ban) }}">{{ csrf_field() }}<button type="submit" class="btn btn-outline-danger">Remove ban</button></form>
                         </div>
                     </div>
                 @endforeach

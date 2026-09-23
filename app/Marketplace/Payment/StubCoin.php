@@ -47,7 +47,10 @@ class StubCoin implements Coin
         Log::info("Sending to address " . $toAddress . " to amount " . $amount);
     }
 
+    function incomingTransfers(string $address): array {
+        return [];
+    }
+
 
 }
-
 

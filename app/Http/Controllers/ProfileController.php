@@ -309,7 +309,7 @@ class ProfileController extends Controller
     public function removeProduct(Product $product)
     {
         Cart::getCart() -> removeFromCart($product);
-        session() -> flash('You have removed a product.');
+        session()->flash('success', 'You have removed a product.');
 
         return redirect() -> back();
     }
@@ -321,10 +321,15 @@ class ProfileController extends Controller
      */
     public function checkout()
     {
+        if (Cart::getCart()->numberOfItems() === 0) {
+            return redirect()->route('profile.cart')->with('errormessage', 'Add at least one product before opening checkout.');
+        }
+
         return view('cart.checkout', [
             'items' => Cart::getCart() -> items(),
             'totalSum' => Cart::getCart() -> total(),
             'numberOfItems' => Cart::getCart()->numberOfItems(),
+            'wallets' => auth()->user()->wallets()->whereIn('coin', ['btc', 'xmr', 'ltc'])->get()->keyBy('coin'),
 
         ]);
     }
@@ -400,6 +405,8 @@ class ProfileController extends Controller
      */
     public function deliveredConfirm(Purchase $purchase)
     {
+        abort_unless($purchase->isBuyer(), 403);
+
         return view('profile.purchases.confirmdelivered', [
             'backRoute' => redirect() -> back() -> getTargetUrl(),
             'purchase' => $purchase,
@@ -414,6 +421,8 @@ class ProfileController extends Controller
      */
     public function markAsDelivered(Purchase $purchase)
     {
+        abort_unless($purchase->isBuyer(), 403);
+
         try{
             $purchase -> delivered();
         }
@@ -432,6 +441,8 @@ class ProfileController extends Controller
      */
     public function confirmCanceled(Purchase $purchase)
     {
+        abort_unless($purchase->isBuyer() || $purchase->isVendor(), 403);
+
         return view('profile.purchases.confirmcanceled', [
             'backRoute' => redirect() -> back() -> getTargetUrl(),
             'sale' => $purchase
@@ -446,6 +457,8 @@ class ProfileController extends Controller
      */
     public function markAsCanceled(Purchase $purchase)
     {
+        abort_unless($purchase->isBuyer() || $purchase->isVendor(), 403);
+
         try{
             $purchase -> cancel();
             session() -> flash('success', 'You have successfully marked sale as canceled!');

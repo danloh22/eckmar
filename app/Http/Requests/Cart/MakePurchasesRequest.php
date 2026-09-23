@@ -7,7 +7,9 @@ use App\Marketplace\Cart;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Services\WalletLedgerService;
 use Illuminate\Validation\Rule;
+use App\Events\Purchase\NewPurchase;
 
 class MakePurchasesRequest extends FormRequest
 {
@@ -33,31 +35,39 @@ class MakePurchasesRequest extends FormRequest
         ];
     }
 
-    public function persist()
+    public function persist(WalletLedgerService $ledger = null)
     {
+        $ledger = $ledger ?: app(WalletLedgerService::class);
+        $purchases = [];
         try{
-            DB::beginTransaction();
-            // foreach item in cart
-            foreach (Cart::getCart() -> items() as $productId => $item){
-                // Purchase procedure
-                $item -> purchased();
-                // Persist the purchase
-                $item -> save();
-            }
-            DB::commit();
+            $items = Cart::getCart()->items();
+            ksort($items);
+            DB::transaction(function () use ($items, $ledger, &$purchases) {
+                foreach ($items as $item) {
+                    $item->purchased();
+                    $item->save();
+                    $ledger->reservePurchase($item);
+                    $purchases[] = $item;
+                }
+            }, 3);
             // Clear cart after commiting
             Cart::getCart() -> clearCart();
         }
         catch(RequestException $requestException){
-            DB::rollBack();
             Log::error($requestException -> getMessage());
             throw new RequestException($requestException -> getMessage());
         }
         catch (\Exception $e){
-            \Illuminate\Support\Facades\Log::error($e->getMessage());
-            DB::rollBack();
             Log::error($e -> getMessage());
             throw new RequestException('Error happened! Try again later!');
+        }
+
+        foreach ($purchases as $purchase) {
+            try {
+                event(new NewPurchase($purchase));
+            } catch (\Exception $exception) {
+                report($exception);
+            }
         }
     }
 }
