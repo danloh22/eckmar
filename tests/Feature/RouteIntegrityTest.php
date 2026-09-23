@@ -24,6 +24,9 @@ class RouteIntegrityTest extends TestCase
         $this->assertSame(['POST'], $route->methods());
         $this->assertSame(['POST'], Route::getRoutes()->getByName('profile.cart.clear')->methods());
         $this->assertSame(['POST'], Route::getRoutes()->getByName('profile.cart.remove')->methods());
+        $this->assertSame(['POST'], Route::getRoutes()->getByName('profile.sales.sent')->methods());
+        $this->assertSame(['POST'], Route::getRoutes()->getByName('profile.purchases.delivered')->methods());
+        $this->assertSame(['POST'], Route::getRoutes()->getByName('profile.purchases.canceled')->methods());
     }
 
     public function testWalletExchangeAndFeeAddressUpdatesArePostOnly()

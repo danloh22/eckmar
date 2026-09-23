@@ -405,6 +405,8 @@ class ProfileController extends Controller
      */
     public function deliveredConfirm(Purchase $purchase)
     {
+        abort_unless($purchase->isBuyer(), 403);
+
         return view('profile.purchases.confirmdelivered', [
             'backRoute' => redirect() -> back() -> getTargetUrl(),
             'purchase' => $purchase,
@@ -419,6 +421,8 @@ class ProfileController extends Controller
      */
     public function markAsDelivered(Purchase $purchase)
     {
+        abort_unless($purchase->isBuyer(), 403);
+
         try{
             $purchase -> delivered();
         }
@@ -437,6 +441,8 @@ class ProfileController extends Controller
      */
     public function confirmCanceled(Purchase $purchase)
     {
+        abort_unless($purchase->isBuyer() || $purchase->isVendor(), 403);
+
         return view('profile.purchases.confirmcanceled', [
             'backRoute' => redirect() -> back() -> getTargetUrl(),
             'sale' => $purchase
@@ -451,6 +457,8 @@ class ProfileController extends Controller
      */
     public function markAsCanceled(Purchase $purchase)
     {
+        abort_unless($purchase->isBuyer() || $purchase->isVendor(), 403);
+
         try{
             $purchase -> cancel();
             session() -> flash('success', 'You have successfully marked sale as canceled!');

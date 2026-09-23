@@ -362,7 +362,7 @@ trait Purchasable {
      */
     public function cancel()
     {
-        throw_if($this -> state == 'canceled', new RequestException("The order is already canceled"));
+        throw_unless(in_array($this->state, ['purchased', 'sent'], true), new RequestException('Only purchased or sent orders can be canceled.'));
         try{
             DB::beginTransaction();
 

@@ -76,7 +76,7 @@ Route::prefix('profile')->group(function(){
     Route::get('sales/{state?}', 'VendorController@sales') -> name('profile.sales');
     Route::get('sale/{sale}', 'VendorController@sale') -> name('profile.sales.single');
     Route::get('sales/{sale}/sent/confirm', 'VendorController@confirmSent') -> name('profile.sales.sent.confirm');
-    Route::get('sale/{sale}/sent', 'VendorController@markAsSent') -> name('profile.sales.sent');
+    Route::post('sale/{sale}/sent', 'VendorController@markAsSent') -> name('profile.sales.sent');
 
     // Cart routes
     Route::get('cart', 'ProfileController@cart') -> name('profile.cart');
@@ -91,11 +91,11 @@ Route::prefix('profile')->group(function(){
     Route::get('purchases/{purchase}/message', 'ProfileController@purchaseMessage') -> name('profile.purchases.message');
     Route::get('purchase/{purchase}', 'ProfileController@purchase') -> name('profile.purchases.single');
     Route::get('purchase/{purchase}/delivered/confirm', 'ProfileController@deliveredConfirm') -> name('profile.purchases.delivered.confirm');
-    Route::get('purchase/{purchase}/delivered', 'ProfileController@markAsDelivered') -> name('profile.purchases.delivered');
+    Route::post('purchase/{purchase}/delivered', 'ProfileController@markAsDelivered') -> name('profile.purchases.delivered');
 
     // canceled for both Vendor and Buyer
     Route::get('purchase/{purchase}/canceled/confirm', 'ProfileController@confirmCanceled') -> name('profile.purchases.canceled.confirm');
-    Route::get('purchase/{purchase}/canceled', 'ProfileController@markAsCanceled') -> name('profile.purchases.canceled');
+    Route::post('purchase/{purchase}/canceled', 'ProfileController@markAsCanceled') -> name('profile.purchases.canceled');
 
     // Purchase - Disputes
     Route::post('purchase/{purchase}/dispute', 'ProfileController@makeDispute') -> name('profile.purchases.dispute');
