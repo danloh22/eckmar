@@ -23,10 +23,13 @@ class BitcoinPayment implements Coin
      */
     public function __construct()
     {
-        $this -> bitcoind = new RPCWrapper(config('coins.bitcoin.username'),
-            config('coins.bitcoin.password'),
-            config('coins.bitcoin.host'),
-            config('coins.bitcoin.port'));
+        $config = config('coins.' . $this->rpcConfigKey());
+        $this -> bitcoind = new RPCWrapper($config['username'], $config['password'], $config['host'], $config['port']);
+    }
+
+    protected function rpcConfigKey(): string
+    {
+        return 'bitcoin';
     }
 
     /**
@@ -64,7 +67,7 @@ class BitcoinPayment implements Coin
     {
         // first check by address
         if(array_key_exists('address', $params))
-            $accountBalance = $this -> bitcoind -> getreceivedbyaddress($params['address'], (int)config('marketplace.bitcoin.minconfirmations'));
+            $accountBalance = $this -> bitcoind -> getreceivedbyaddress($params['address'], (int)config('coins.wallet_confirmations.' . $this->coinLabel()));
 //        else if(array_key_exists('account', $params))
 //            // fetch the balance of the account if this parameter is set
 //            $accountBalance = $this -> bitcoind -> getbalance($params['account'], (int)config('marketplace.bitcoin.minconfirmations'));
@@ -88,11 +91,12 @@ class BitcoinPayment implements Coin
     function sendToAddress(string $toAddress, float $amount)
     {
         // call bitcoind procedure
-        $this -> bitcoind -> sendtoaddress($toAddress, $amount);
+        $transactionId = $this -> bitcoind -> sendtoaddress($toAddress, $amount);
 
         if($this -> bitcoind -> error)
             throw new \Exception("Sending to $toAddress amount $amount \n" . $this -> bitcoind -> error);
 
+        return $transactionId;
     }
 
     /**
@@ -109,7 +113,7 @@ class BitcoinPayment implements Coin
 //            $this -> bitcoind -> sendtoaddress($address, $amount);
 //        }
 
-        $this->bitcoind->sendmany("", $addressesAmounts, (int)config('marketplace.bitcoin.minconfirmations'));
+        $this->bitcoind->sendmany("", $addressesAmounts, (int)config('coins.wallet_confirmations.' . $this->coinLabel()));
 
 
         if ($this->bitcoind->error) {
@@ -140,6 +144,34 @@ class BitcoinPayment implements Coin
     function coinLabel(): string
     {
         return 'btc';
+    }
+
+    public function incomingTransfers(string $address): array
+    {
+        $transactions = $this->bitcoind->listtransactions('*', 1000, 0, true);
+        if ($this->bitcoind->error) {
+            throw new \Exception($this->bitcoind->error);
+        }
+
+        $incoming = [];
+        foreach ((array) $transactions as $transaction) {
+            if (($transaction['category'] ?? null) !== 'receive' || ($transaction['address'] ?? null) !== $address) {
+                continue;
+            }
+            $incoming[] = [
+                'transaction_hash' => $transaction['txid'],
+                'transaction_output' => (string) ($transaction['vout'] ?? 0),
+                'amount_atomic' => $this->coinToAtomic($transaction['amount']),
+                'confirmations' => max(0, (int) ($transaction['confirmations'] ?? 0)),
+                'block_height' => null,
+            ];
+        }
+        return $incoming;
+    }
+
+    private function coinToAtomic($amount): string
+    {
+        return str_replace('.', '', number_format((float) $amount, config('coins.atomic_decimals.' . $this->coinLabel()), '.', ''));
     }
 
 

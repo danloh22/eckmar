@@ -57,7 +57,7 @@ class VendorPurchase extends Model
         }
         catch (\Exception $e){
             // inform admin
-            Log::warning("Request for balance of the '$this->address', coin '$this->coin' is failed beacuse:");
+            Log::warning("Request for balance of the '$this->address', coin '$this->coin' failed because:");
             Log::warning($e -> getMessage());
             return 'Unavailable';
         }
@@ -136,12 +136,14 @@ class VendorPurchase extends Model
             $coinServiceClass = config('coins.coin_list.'. $this -> coin);
             $coinService = new $coinServiceClass();
 
-            $marketCoinAddresses = config('coins.market_addresses.' . $this->coin);
-            // pick one from the array
-            $marketCoinAddress = $marketCoinAddresses[array_rand($marketCoinAddresses)];
+            $marketCoinAddress = optional(MarketFeeWallet::where('coin', $this->coin)->first())->address;
+            if (!$marketCoinAddress) {
+                throw new \RuntimeException('The administrator has not configured the market wallet for ' . strtoupper($this->coin) . '.');
+            }
 
             // send to market address
             $coinService->sendToAddress($marketCoinAddress, $this->getBalance());
+            return true;
 
         }
         catch (\Exception $e){

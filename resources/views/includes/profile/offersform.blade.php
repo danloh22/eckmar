@@ -16,7 +16,7 @@
                 <th>{{ $offer -> local_price }}</th>
                 <td>{{ $offer -> min_quantity }}</td>
                 <td class="text-right">
-                    <a href="{{ route('profile.vendor.product.offers.remove', [ $offer -> min_quantity, $basicProduct]) }}" class="btn btn-sm btn-outline-danger">Remove</a>
+                    <form method="POST" action="{{ route('profile.vendor.product.offers.remove', [$offer->min_quantity, $basicProduct]) }}">{{ csrf_field() }}<button type="submit" class="btn btn-sm btn-outline-danger">Remove</button></form>
                 </td>
             </tr>
         @endforeach

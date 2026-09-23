@@ -46,9 +46,9 @@
             <label>2-Factor Authentication:</label>
         </div>
         <div class="col-md-6 text-right">
-            <div class="btn-group" role="group" aria-label="Basic example">
-                <a href="{{ route('profile.2fa.change', true) }}" class="btn @if(auth() -> user() -> login_2fa == true) btn-success @else btn-outline-success @endif">On</a>
-                <a href="{{ route('profile.2fa.change', 0) }}" class="btn @if(auth() -> user() -> login_2fa == false) btn-danger @else btn-outline-danger @endif">Off</a>
+            <div class="btn-group" role="group" aria-label="Two-factor authentication setting">
+                <form method="POST" action="{{ route('profile.2fa.change', 1) }}">{{ csrf_field() }}<button type="submit" class="btn @if(auth()->user()->login_2fa) btn-success @else btn-outline-success @endif">On</button></form>
+                <form method="POST" action="{{ route('profile.2fa.change', 0) }}">{{ csrf_field() }}<button type="submit" class="btn @if(!auth()->user()->login_2fa) btn-danger @else btn-outline-danger @endif">Off</button></form>
             </div>
         </div>
     </div>
@@ -109,7 +109,7 @@
                             <td class="text-muted text-right">
                                 {{ $address -> added_ago }}
                             </td>
-                            <td class="text-right"><a href="{{ route('profile.vendor.address.remove', $address) }}" class="btn btn-danger"><i class="fa fa-trash mr-1"></i>Remove</a></td>
+                            <td class="text-right"><form method="POST" action="{{ route('profile.vendor.address.remove', $address) }}">{{ csrf_field() }}<button type="submit" class="btn btn-danger"><i class="fa fa-trash mr-1"></i>Remove</button></form></td>
                         </tr>
                     @endforeach
                 </tbody>

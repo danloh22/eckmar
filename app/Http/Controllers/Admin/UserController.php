@@ -123,4 +123,17 @@ class UserController extends Controller
         return redirect() -> back();
     }
 
+    public function resetWithdrawalPin(User $user)
+    {
+        abort_unless(auth()->user()->isAdmin(), 403);
+
+        $user->withdrawal_pin = null;
+        $user->withdrawal_pin_reset_required_at = now();
+        $user->save();
+        $user->notify('An administrator reset your withdrawal PIN. Set a new PIN from your wallet before requesting another withdrawal.', 'profile.wallet');
+
+        return redirect()->route('admin.users.view', $user)
+            ->with('success', 'The withdrawal PIN was reset.');
+    }
+
 }

@@ -3,10 +3,22 @@
 
 Route::get('index', 'Admin\AdminController@index') -> name('admin.index');
 
+Route::get('wallet/withdrawals', 'Admin\WalletController@withdrawals')->name('admin.wallet.withdrawals');
+Route::get('wallets', 'Admin\WalletController@wallets')->name('admin.wallets');
+Route::post('wallets/{wallet}/status/{status}', 'Admin\WalletController@setWalletStatus')->name('admin.wallets.status');
+Route::post('wallets/{wallet}/adjust', 'Admin\WalletController@adjustWallet')->name('admin.wallets.adjust');
+Route::post('wallet/withdrawals/{withdrawal}/approve', 'Admin\WalletController@approve')->name('admin.wallet.withdrawals.approve');
+Route::post('wallet/withdrawals/{withdrawal}/reject', 'Admin\WalletController@reject')->name('admin.wallet.withdrawals.reject');
+Route::post('wallet/withdrawals/{withdrawal}/resolve-failed', 'Admin\WalletController@resolveFailedWithdrawal')->name('admin.wallet.withdrawals.resolve-failed');
+Route::get('wallet/exchanges', 'Admin\WalletController@exchanges')->name('admin.wallet.exchanges');
+Route::post('wallet/fee-addresses/{coin}', 'Admin\WalletController@updateFeeWallet')->name('admin.wallet.fee-addresses.update');
+Route::post('wallet/liquidity/{coin}', 'Admin\WalletController@adjustMarketLiquidity')->name('admin.wallet.liquidity.adjust');
+Route::post('wallet/fee-sweeps/{sweep}/resolve-failed', 'Admin\WalletController@resolveFailedFeeSweep')->name('admin.wallet.fee-sweeps.resolve-failed');
+
 // Categories routes
 Route::get('categories', 'Admin\AdminController@categories') -> name('admin.categories');
 Route::post('category/new', 'Admin\AdminController@newCategory') -> name('admin.categories.new');
-Route::get('category/delete/{id}', 'Admin\AdminController@removeCategory') -> name('admin.categories.delete');
+Route::post('category/delete/{id}', 'Admin\AdminController@removeCategory') -> name('admin.categories.delete');
 Route::get('category/{id}', 'Admin\AdminController@editCategoryShow') -> name('admin.categories.show');
 Route::post('category/{id}', 'Admin\AdminController@editCategory') -> name('admin.categories.edit');
 
@@ -23,7 +35,8 @@ Route::post('users/edit/group/{user}','Admin\UserController@editUserGroup')->nam
 Route::post('users/edit/info/{user}','Admin\UserController@editBasicInfo')->name('admin.user.edit.info');
 
 Route::post('users/ban/{user}', 'Admin\UserController@banUser')->name('admin.user.ban');
-Route::get('users/remove/ban/{ban}', 'Admin\UserController@removeBan')->name('admin.ban.remove');
+Route::post('users/{user}/withdrawal-pin/reset', 'Admin\UserController@resetWithdrawalPin')->name('admin.user.withdrawal-pin.reset');
+Route::post('users/remove/ban/{ban}', 'Admin\UserController@removeBan')->name('admin.ban.remove');
 
 
 // Log
@@ -48,7 +61,7 @@ Route::get('purchase/{purchase}', 'Admin\AdminController@purchase') -> name('adm
 // Support tickets
 Route::get('tickets', 'Admin\AdminController@tickets') -> name('admin.tickets');
 Route::get('ticket/{ticket}', 'Admin\AdminController@viewTicket') -> name('admin.tickets.view');
-Route::get('ticket/{ticket}/solve', 'Admin\AdminController@solveTicket') -> name('admin.tickets.solve');
+Route::post('ticket/{ticket}/solve', 'Admin\AdminController@solveTicket') -> name('admin.tickets.solve');
 
 // Vendor purchases
 Route::get('vendor/purchases', 'Admin\AdminController@vendorPurchases') -> name('admin.vendor.purchases');
@@ -56,7 +69,7 @@ Route::get('vendor/purchases', 'Admin\AdminController@vendorPurchases') -> name(
 // Featured products
 
 Route::get('products/featured','Admin\ProductController@featuredProductsShow')->name('admin.featuredproducts.show');
-Route::get('products/featured/mark/{product}','Admin\ProductController@markAsFeatured')->name('admin.product.markfeatured');
+Route::post('products/featured/mark/{product}','Admin\ProductController@markAsFeatured')->name('admin.product.markfeatured');
 
 Route::post('products/featured/remove','Admin\ProductController@removeFromFeatured')->name('admin.featuredproducts.remove');
 

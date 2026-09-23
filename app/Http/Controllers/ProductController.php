@@ -8,6 +8,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class ProductController extends Controller
@@ -210,9 +211,15 @@ class ProductController extends Controller
 
             DB::commit();
         } catch (\Exception $e) {
-
             DB::rollBack();
-            dd($e);
+            Log::error('Unable to clone product.', [
+                'product_id' => $product->id,
+                'user_id' => optional(auth()->user())->id,
+                'exception' => $e,
+            ]);
+
+            return redirect()->route('profile.vendor')
+                ->with('errormessage', 'The product could not be cloned. Please try again.');
         }
 
         return redirect()->route('profile.vendor');

@@ -42,7 +42,7 @@
             </div>
                 <div class="mt-3">
                     Forgot your password?
-                    <a href="/forgotpassword" style="text-decoration: none">Reset it here
+                    <a href="{{ route('auth.forgotpassword') }}" style="text-decoration: none">Reset it here
                     </a>
                 </div>
         </div>

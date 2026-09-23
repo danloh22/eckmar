@@ -6,7 +6,6 @@ namespace App\Traits;
 use App\Dispute;
 use App\DisputeMessage;
 use App\Events\Purchase\CanceledPurchase;
-use App\Events\Purchase\NewPurchase;
 use App\Events\Purchase\ProductDelivered;
 use App\Events\Purchase\ProductDisputed;
 use App\Events\Purchase\ProductDisputeResolved;
@@ -16,6 +15,7 @@ use App\Exceptions\RequestException;
 use App\Marketplace\Cart;
 use App\Shipping;
 use App\User;
+use App\Offer;
 
 
 use Illuminate\Support\Facades\DB;
@@ -35,6 +35,12 @@ trait Purchasable {
             throw new RequestException('Selected shipping is deleted, please add the product again.');
         }
 
+        $offer = Offer::where('id', $this->offer_id)->lockForUpdate()->firstOrFail();
+        $product = $offer->product()->lockForUpdate()->firstOrFail();
+        throw_unless($product->active, new RequestException('This product is no longer available.'));
+        $offer->setRelation('product', $product);
+        $this->setRelation('offer', $offer);
+
         // Generate Payment Service from Service Container
         $this -> payment = app() -> makeWith(\App\Marketplace\Payment\Payment::class, ['purchase' => $this]);
 
@@ -47,8 +53,6 @@ trait Purchasable {
         // Substract the quantity from the product
         $this -> offer -> product -> substractQuantity($this -> quantity);
         $this -> offer -> product -> save();
-
-        event(new NewPurchase($this));
 
         // if it is autodelivery mark as sent and run sent procedure
         if($this -> offer -> product -> isAutodelivery()){
@@ -66,25 +70,27 @@ trait Purchasable {
     }
 
     private function markingAsSent(){
-        throw_unless($this->enoughBalance(),new RequestException("Order must be paid by buyer"));
-        try{
-            DB::beginTransaction();
-            // Payment service runs procedure
-            $this -> getPayment() -> sent();
+        try {
+            $sent = DB::transaction(function () {
+                $purchase = self::where('id', $this->id)->lockForUpdate()->firstOrFail();
+                throw_unless($purchase->state === 'purchased', new RequestException('Purchase must be in purchased state.'));
+                throw_unless($purchase->enoughBalance(), new RequestException('Order must be paid by buyer.'));
 
-            $this -> state = 'sent';
-            $this -> save();
+                $purchase->getPayment()->sent();
+                $purchase->state = 'sent';
+                $purchase->save();
 
-            DB::commit();
-            event(new ProductSent($this));
+                return $purchase;
+            });
 
-        }
-        catch (\Exception $e){
-            DB::rollBack();
-
-            Log::error("Purchase $this->id : " . $e->getMessage());
-
-            throw new RequestException('Error happened! Please try again later!');
+            $this->refresh();
+            event(new ProductSent($sent));
+        } catch (\Exception $exception) {
+            Log::error("Purchase $this->id shipment update failed: " . $exception->getMessage());
+            if ($exception instanceof RequestException) {
+                throw $exception;
+            }
+            throw new RequestException('The purchase could not be marked as sent. Please try again later.');
         }
     }
 
@@ -115,29 +121,7 @@ trait Purchasable {
      * Releasing sent purchases and making the purchase delivered
      */
     public function release(){
-        // state must be 'sent' to be delivered
-        throw_unless($this->state=='sent', new RequestException('This purchase is already delivered!'));
-
-
-        try{
-            $this->state = 'delivered';
-            $this -> save();
-
-            // state now must be delivered
-            throw_unless($this->state=='delivered', new \Exception('This purchase is already delivered!'));
-            $this -> getPayment() -> delivered();
-
-            event(new ProductDelivered($this));
-        }
-        catch (\Exception $e){
-            // return to before state
-            $this->state='sent';
-            $this->save();
-
-            // logout the exception message
-            Log::error("Purchase $this->id " . $e ->getMessage());
-            throw new RequestException('Error happened! Please try again later!');
-        }
+        $this->settleDeliveredPurchase();
     }
 
     /**
@@ -150,29 +134,7 @@ trait Purchasable {
      * @throws \Throwable
      */
     private function markingAsDelivered(){
-        // state must be 'sent' to be delivered
-        throw_unless($this->state=='sent', new RequestException('This purchase is already delivered!'));
-
-
-        try{
-            $this->state = 'delivered';
-            $this -> save();
-
-            // state now must be delivered
-            throw_unless($this->state=='delivered', new \Exception('This purchase is already delivered!'));
-            $this -> getPayment() -> delivered();
-
-            event(new ProductDelivered($this));
-        }
-        catch (\Exception $e){
-            // return to 'purchased' state cause this is called for finalize early
-            $this->state='purchased';
-            $this->save();
-
-            // logout the exception message
-            Log::error("Purchase $this->id :"  . $e ->getMessage());
-            throw new RequestException($e ->getMessage());
-        }
+        $this->settleDeliveredPurchase();
     }
 
 
@@ -187,32 +149,38 @@ trait Purchasable {
 
         throw_if($this->type!='normal', new RequestException('This purchase must be Escrow type!'));
 
-        // state must be 'sent' to be delivered
-        throw_unless($this->state=='sent', new RequestException('This purchase is already delivered!'));
+        $this->settleDeliveredPurchase();
 
+    }
 
-        try{
-            $this->state = 'delivered';
-            $this -> save();
+    /**
+     * Atomically settle a sent purchase and its wallet escrow hold.
+     * The row lock prevents concurrent buyer and scheduler releases from
+     * overwriting a completed purchase back to the sent state.
+     */
+    private function settleDeliveredPurchase()
+    {
+        try {
+            $settled = DB::transaction(function () {
+                $purchase = self::where('id', $this->id)->lockForUpdate()->firstOrFail();
+                throw_unless($purchase->state === 'sent', new RequestException('This purchase is not awaiting delivery.'));
 
-            // state now must be delivered
-            throw_unless($this->state=='delivered', new \Exception('This purchase is already delivered!'));
-            $this -> getPayment() -> delivered();
+                $purchase->state = 'delivered';
+                $purchase->save();
+                $purchase->getPayment()->delivered();
 
-            event(new ProductDelivered($this));
+                return $purchase;
+            });
+
+            $this->refresh();
+            event(new ProductDelivered($settled));
+        } catch (\Exception $exception) {
+            Log::error("Purchase $this->id settlement failed: " . $exception->getMessage());
+            if ($exception instanceof RequestException) {
+                throw $exception;
+            }
+            throw new RequestException('The purchase could not be settled. Please try again later.');
         }
-        catch (\Exception $e){
-            // return to before state
-            $this->state='sent';
-            $this->save();
-
-            // logout the exception message
-
-            Log::error("Purchase $this->id :" . $e ->getMessage());
-
-            throw new RequestException('Error happened! Please try again later!');
-        }
-
     }
 
     /**
@@ -225,14 +193,7 @@ trait Purchasable {
         // Purchase type must be Finalize Early
         if($this->type != 'fe')
             return false;
-        // Purchased
-        if($this->state == 'purchased')
-            return true;
-        // if is sent and the product of the purchase is digital and autodelivery
-        if($this->state == 'sent' && $this->offer->product->isDigital() && $this->offer->product->isAutodelivery())
-            return true;
-
-        return false;
+        return in_array($this->state, ['purchased', 'sent'], true);
     }
 
     /**
@@ -249,38 +210,16 @@ trait Purchasable {
         // checking if it is not in purchased state
         throw_if(!$this->isCompletable(), new RequestException('The purchase you selected is not in purchased state or not in sent state and product is not autodelivery!'));
 
-        // Marking purchase as sent
-        $this->markingAsSent();
+        // Mark as sent once. A prior failed settlement safely remains sent and can be retried.
+        if ($this->state === 'purchased') {
+            $this->markingAsSent();
+        }
 
         // Releasing funds to vendor
         $this->markingAsDelivered();
 
-        $this->status_notification = null;
-        $this->save();
     }
 
-    /**
-     * Runs procedure when the product is marked as disputed
-     * Atomic in transaction
-     */
-    public function disputed()
-    {
-        try{
-            DB::beginTransaction();
-            // Disputed procedure from selected
-            $this -> getPayment() -> disputed();
-
-            $this -> state = 'disputed';
-
-            $this -> save();
-            DB::commit();
-
-        }
-        catch (\Exception $e){
-            DB::rollBack();
-            throw new RequestException('Error happened! Please try again later!');
-        }
-    }
     /**
      * Make dispute and dispute message
      *
@@ -288,36 +227,41 @@ trait Purchasable {
      */
     public function makeDispute($message)
     {
-        if(!$this->canMakeDispute())
-            throw new RequestException('You don\' have permission to make dispute!');
-
-        try{
-            DB::beginTransaction();
-            // Make dispute
-            $newDispute = new Dispute();
-            $newDispute -> save();
-            // Make message
-            $newDisputeMessage = new DisputeMessage();
-            $newDisputeMessage -> setDispute($newDispute);
-            $newDisputeMessage -> message = $message;
-            $newDisputeMessage -> setAuthor(auth() -> user());
-            $newDisputeMessage -> save();
-
-
-            // Mark as disputed
-            $this -> state = 'disputed';
-            $this -> setDispute($newDispute);
-
-            $this -> save();
-
-            DB::commit();
-            event(new ProductDisputed($this,auth()->user()));
-        }
-        catch (\Exception $e){
-            DB::rollBack();
-            throw new RequestException('Something went wrong! Please try again!' . $e -> getMessage());
+        $author = auth()->user();
+        if (!$author) {
+            throw new RequestException('You must be logged in to open a dispute.');
         }
 
+        try {
+            $disputed = DB::transaction(function () use ($message, $author) {
+                $purchase = self::where('id', $this->id)->lockForUpdate()->firstOrFail();
+                throw_unless($purchase->canMakeDispute(), new RequestException('This purchase cannot be disputed.'));
+
+                $newDispute = new Dispute();
+                $newDispute->save();
+
+                $newDisputeMessage = new DisputeMessage();
+                $newDisputeMessage->setDispute($newDispute);
+                $newDisputeMessage->message = $message;
+                $newDisputeMessage->setAuthor($author);
+                $newDisputeMessage->save();
+
+                $purchase->state = 'disputed';
+                $purchase->setDispute($newDispute);
+                $purchase->save();
+
+                return $purchase;
+            });
+
+            $this->refresh();
+            event(new ProductDisputed($disputed, $author));
+        } catch (\Exception $exception) {
+            Log::error("Purchase $this->id dispute creation failed: " . $exception->getMessage());
+            if ($exception instanceof RequestException) {
+                throw $exception;
+            }
+            throw new RequestException('The dispute could not be opened. Please try again later.');
+        }
     }
 
     /**
@@ -329,31 +273,34 @@ trait Purchasable {
     public function resolveDispute(string $winnerId)
     {
         $winner = User::find($winnerId);
-        throw_if($this->isDisputed() && $this->dispute->isResolved(), new RequestException("The dispute is already resolved!"));
         if(is_null($winner)) throw new RequestException('This user can not be winner!');
 
+        try {
+            $resolved = DB::transaction(function () use ($winner) {
+                $purchase = self::where('id', $this->id)->lockForUpdate()->firstOrFail();
+                throw_unless($purchase->state === 'disputed' && $purchase->dispute_id, new RequestException('This purchase has no open dispute.'));
+                throw_unless($purchase->isBuyer($winner) || $purchase->isVendor($winner), new RequestException('User must be the vendor or buyer.'));
 
+                $dispute = Dispute::where('id', $purchase->dispute_id)->lockForUpdate()->firstOrFail();
+                throw_if($dispute->isResolved(), new RequestException('The dispute is already resolved.'));
 
-        // user is not neither vendor or buyer
-        if(!$this -> isBuyer($winner) && !$this -> isVendor($winner))
-            throw new RequestException('User must be vendor or buyer!');
+                $purchase->getPayment()->resolved(['winner_id' => $winner->id]);
+                $dispute->winner_id = $winner->id;
+                $dispute->save();
+                $purchase->state = 'delivered';
+                $purchase->save();
 
-        try{
-            DB::beginTransaction();
+                return $purchase;
+            });
 
-            // Set the winner
-            $this -> dispute -> winner_id = $winner -> id;
-            // run resolved procedure
-            $this -> getPayment() -> resolved(['receiving_address' => $winner -> coinAddress($this -> getPayment() -> coinLabel()) -> address]);
-
-            $this -> dispute -> save();
-
-            DB::commit();
-            event(new ProductDisputeResolved($this));
-        }
-        catch (\Exception $e){
-            DB::rollBack();
-            throw new RequestException('Something went wrong, please try again!' . $e -> getMessage());
+            $this->refresh();
+            event(new ProductDisputeResolved($resolved));
+        } catch (\Exception $exception) {
+            Log::error("Purchase $this->id dispute resolution failed: " . $exception->getMessage());
+            if ($exception instanceof RequestException) {
+                throw $exception;
+            }
+            throw new RequestException('The dispute could not be resolved. Please try again later.');
         }
     }
 
@@ -362,27 +309,32 @@ trait Purchasable {
      */
     public function cancel()
     {
-        throw_if($this -> state == 'canceled', new RequestException("The order is already canceled"));
-        try{
-            DB::beginTransaction();
+        try {
+            $canceled = DB::transaction(function () {
+                $purchase = self::where('id', $this->id)->lockForUpdate()->firstOrFail();
+                throw_unless(in_array($purchase->state, ['purchased', 'sent'], true), new RequestException('Only purchased or sent orders can be canceled.'));
 
-            // restore product stock number
-            $this->offer->product->quantity+=$this->quantity;
-            $this->offer->product->save();
+                $product = $purchase->offer->product()->lockForUpdate()->firstOrFail();
+                if (!$product->isUnlimited()) {
+                    $product->quantity += $purchase->quantity;
+                    $product->save();
+                }
 
-            // Set the state
-            $this -> state = 'canceled';
-            // run canceled procedure
-            $this -> getPayment() -> canceled();
-            $this -> save();
+                $purchase->state = 'canceled';
+                $purchase->save();
+                $purchase->getPayment()->canceled();
 
-            DB::commit();
-            event(new CanceledPurchase($this));
-        }
-        catch (\Exception $e){
-            DB::rollBack();
-            Log::error($e); // post error to log
-            throw new RequestException('Something went wrong, please try again!' . $e -> getMessage());
+                return $purchase;
+            });
+
+            $this->refresh();
+            event(new CanceledPurchase($canceled));
+        } catch (\Exception $exception) {
+            Log::error("Purchase $this->id cancellation failed: " . $exception->getMessage());
+            if ($exception instanceof RequestException) {
+                throw $exception;
+            }
+            throw new RequestException('The purchase could not be canceled. Please try again later.');
         }
     }
 

@@ -27,7 +27,7 @@
             on this store.
         </div>
         <div class="text-center">
-            <a href="{{ route('profile.vendor.become') }}" class="btn btn-outline-success btn-md">Become vendor</a>
+            <a href="{{ route('profile.become') }}" class="btn btn-outline-success btn-md">Become vendor</a>
         </div>
 
     @endvendor
