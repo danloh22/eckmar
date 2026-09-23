@@ -108,6 +108,55 @@ class WalletController extends Controller
         return redirect()->route('admin.wallet.withdrawals')->with('success', 'Withdrawal rejected and funds returned.');
     }
 
+    public function resolveFailedWithdrawal(Request $request, WithdrawalRequest $withdrawal)
+    {
+        abort_unless(auth()->user()->isAdmin(), 403);
+        $request->validate([
+            'resolution' => 'required|in:retry,refund',
+            'reason' => 'required|string|min:10|max:500',
+        ]);
+
+        DB::transaction(function () use ($request, $withdrawal) {
+            $locked = WithdrawalRequest::where('id', $withdrawal->id)->lockForUpdate()->firstOrFail();
+            abort_unless($locked->status === 'failed', 422);
+
+            if ($request->resolution === 'retry') {
+                $locked->status = 'approved';
+                $locked->approved_by = auth()->id();
+                $locked->approved_at = now();
+                $locked->admin_note = 'Retry authorized: ' . $request->reason;
+                $locked->save();
+                return;
+            }
+
+            $this->ledger->book(
+                $locked->wallet,
+                'withdrawal_reversal',
+                $locked->amount_atomic,
+                '-' . $locked->amount_atomic,
+                'withdrawal_request',
+                $locked->id,
+                'withdrawal-reversal-' . $locked->id,
+                auth()->id(),
+                'Failed withdrawal refunded: ' . $request->reason,
+                true
+            );
+            $locked->status = 'cancelled';
+            $locked->approved_by = auth()->id();
+            $locked->approved_at = now();
+            $locked->admin_note = 'Funds returned: ' . $request->reason;
+            $locked->save();
+        });
+
+        $withdrawal->refresh();
+        $message = $request->resolution === 'retry'
+            ? 'Your failed withdrawal was reviewed and queued for another broadcast attempt.'
+            : 'Your failed withdrawal was reviewed and the reserved funds were returned to your wallet.';
+        $withdrawal->wallet->user->notify($message, 'profile.wallet');
+
+        return redirect()->route('admin.wallet.withdrawals')->with('success', 'Failed withdrawal resolution recorded.');
+    }
+
     public function exchanges()
     {
         abort_unless(auth()->user()->isAdmin() || auth()->user()->hasPermission('wallets'), 403);

@@ -37,6 +37,7 @@ class RouteIntegrityTest extends TestCase
         $this->assertSame(['POST'], Route::getRoutes()->getByName('admin.wallet.liquidity.adjust')->methods());
         $this->assertSame(['POST'], Route::getRoutes()->getByName('admin.wallets.status')->methods());
         $this->assertSame(['POST'], Route::getRoutes()->getByName('admin.wallets.adjust')->methods());
+        $this->assertSame(['POST'], Route::getRoutes()->getByName('admin.wallet.withdrawals.resolve-failed')->methods());
     }
 
     public function testEveryNamedRouteNameIsUnique()

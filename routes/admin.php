@@ -9,6 +9,7 @@ Route::post('wallets/{wallet}/status/{status}', 'Admin\WalletController@setWalle
 Route::post('wallets/{wallet}/adjust', 'Admin\WalletController@adjustWallet')->name('admin.wallets.adjust');
 Route::post('wallet/withdrawals/{withdrawal}/approve', 'Admin\WalletController@approve')->name('admin.wallet.withdrawals.approve');
 Route::post('wallet/withdrawals/{withdrawal}/reject', 'Admin\WalletController@reject')->name('admin.wallet.withdrawals.reject');
+Route::post('wallet/withdrawals/{withdrawal}/resolve-failed', 'Admin\WalletController@resolveFailedWithdrawal')->name('admin.wallet.withdrawals.resolve-failed');
 Route::get('wallet/exchanges', 'Admin\WalletController@exchanges')->name('admin.wallet.exchanges');
 Route::post('wallet/fee-addresses/{coin}', 'Admin\WalletController@updateFeeWallet')->name('admin.wallet.fee-addresses.update');
 Route::post('wallet/liquidity/{coin}', 'Admin\WalletController@adjustMarketLiquidity')->name('admin.wallet.liquidity.adjust');
