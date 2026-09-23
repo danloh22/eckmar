@@ -8,6 +8,7 @@ use App\Purchase;
 use App\User;
 use App\WalletEscrowHold;
 use App\WalletLedgerEntry;
+use App\MarketFeeWallet;
 use Illuminate\Support\Facades\DB;
 
 class WalletLedgerService
@@ -43,12 +44,12 @@ class WalletLedgerService
             $fee = gmp_strval(gmp_div_q(gmp_add(gmp_mul($hold->amount_atomic, (int) config('marketplace.market_fee_percent', 3)), 99), 100));
             $recipientAmount = gmp_strval(gmp_sub($hold->amount_atomic, $fee));
             $recipientWallet = $this->walletFor($recipient->id, $hold->coin);
-            $marketWallet = $this->systemWalletFor($hold->coin);
+            $marketWallet = $this->marketWalletFor($hold->coin);
 
             $this->book($hold->buyerWallet, $type, '0', '-' . $hold->amount_atomic, 'purchase', $purchase->id, 'purchase-settle-buyer-' . $purchase->id, null, null, true);
             $this->book($recipientWallet, $type, $recipientAmount, '0', 'purchase', $purchase->id, 'purchase-settle-recipient-' . $purchase->id, null, null, true);
             if (gmp_cmp($fee, '0') > 0) {
-                $this->book($marketWallet, $type, $fee, '0', 'purchase', $purchase->id, 'purchase-settle-fee-' . $purchase->id, null, null, true);
+                $this->book($marketWallet, 'market_fee_credit', $fee, '0', 'purchase', $purchase->id, 'purchase-settle-fee-' . $purchase->id, null, null, true);
             }
 
             $hold->status = 'released';
@@ -85,9 +86,21 @@ class WalletLedgerService
         return $atomic === '' ? '0' : $atomic;
     }
 
-    private function systemWalletFor(string $coin): Wallet
+    public function marketWalletFor(string $coin): Wallet
     {
-        return Wallet::firstOrCreate(['user_id' => null, 'coin' => $coin], ['status' => 'active']);
+        return DB::transaction(function () use ($coin) {
+            $configuration = MarketFeeWallet::where('coin', $coin)->lockForUpdate()->first();
+            if (!$configuration) {
+                throw new RequestException('The administrator must configure the ' . strtoupper($coin) . ' market wallet first.');
+            }
+            if ($configuration->wallet_id) {
+                return Wallet::findOrFail($configuration->wallet_id);
+            }
+            $wallet = Wallet::create(['user_id' => null, 'coin' => $coin, 'status' => 'active']);
+            $configuration->wallet_id = $wallet->id;
+            $configuration->save();
+            return $wallet;
+        });
     }
 
     public function book(Wallet $wallet, string $type, string $availableDelta, string $reservedDelta, string $referenceType, $referenceId, string $idempotencyKey, $createdBy = null, $reason = null, bool $allowFrozen = false): WalletLedgerEntry

@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\DepositAddress;
 use App\Admin;
+use App\Exceptions\RequestException;
 use App\Marketplace\Payment\Payment;
 use App\Services\WalletLedgerService;
+use App\Services\WalletExchangeService;
+use App\WalletExchange;
 use App\WithdrawalRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,11 +17,13 @@ use Illuminate\Support\Facades\Hash;
 class WalletController extends Controller
 {
     private $ledger;
+    private $exchange;
 
-    public function __construct(WalletLedgerService $ledger)
+    public function __construct(WalletLedgerService $ledger, WalletExchangeService $exchange)
     {
         $this->middleware(['auth', 'verify_2fa']);
         $this->ledger = $ledger;
+        $this->exchange = $exchange;
     }
 
     public function index()
@@ -33,7 +38,8 @@ class WalletController extends Controller
             ];
         }
 
-        return view('profile.wallet', compact('wallets'));
+        $exchanges = WalletExchange::where('user_id', auth()->id())->latest()->limit(20)->get();
+        return view('profile.wallet', compact('wallets', 'exchanges'));
     }
 
     public function createDepositAddress(Request $request, string $coin)
@@ -115,5 +121,24 @@ class WalletController extends Controller
         $user->save();
 
         return redirect()->route('profile.wallet')->with('success', 'Withdrawal PIN saved.');
+    }
+
+    public function exchange(Request $request)
+    {
+        $request->validate([
+            'source_coin' => 'required|in:btc,xmr,ltc',
+            'target_coin' => 'required|in:btc,xmr,ltc|different:source_coin',
+            'amount' => 'required|regex:/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,12})?$/',
+        ]);
+        try {
+            $this->exchange->exchange(auth()->user(), $request->source_coin, $request->target_coin, $request->amount);
+        } catch (\Exception $exception) {
+            report($exception);
+            $message = $exception instanceof RequestException
+                ? $exception->getMessage()
+                : 'The exchange could not be completed because the current rate is unavailable.';
+            return redirect()->back()->withInput()->with('errormessage', $message);
+        }
+        return redirect()->route('profile.wallet')->with('success', 'Currency exchange completed.');
     }
 }

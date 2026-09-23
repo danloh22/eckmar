@@ -6,6 +6,9 @@ Route::get('index', 'Admin\AdminController@index') -> name('admin.index');
 Route::get('wallet/withdrawals', 'Admin\WalletController@withdrawals')->name('admin.wallet.withdrawals');
 Route::post('wallet/withdrawals/{withdrawal}/approve', 'Admin\WalletController@approve')->name('admin.wallet.withdrawals.approve');
 Route::post('wallet/withdrawals/{withdrawal}/reject', 'Admin\WalletController@reject')->name('admin.wallet.withdrawals.reject');
+Route::get('wallet/exchanges', 'Admin\WalletController@exchanges')->name('admin.wallet.exchanges');
+Route::post('wallet/fee-addresses/{coin}', 'Admin\WalletController@updateFeeWallet')->name('admin.wallet.fee-addresses.update');
+Route::post('wallet/liquidity/{coin}', 'Admin\WalletController@adjustMarketLiquidity')->name('admin.wallet.liquidity.adjust');
 
 // Categories routes
 Route::get('categories', 'Admin\AdminController@categories') -> name('admin.categories');

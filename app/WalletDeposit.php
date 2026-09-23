@@ -22,4 +22,11 @@ class WalletDeposit extends Model
     {
         return $this->belongsTo(DepositAddress::class);
     }
+
+    public function getAmountDisplayAttribute()
+    {
+        $decimals = (int) config('coins.atomic_decimals.' . $this->coin, 8);
+        $value = str_pad((string) $this->amount_atomic, $decimals + 1, '0', STR_PAD_LEFT);
+        return substr($value, 0, -$decimals) . '.' . substr($value, -$decimals);
+    }
 }

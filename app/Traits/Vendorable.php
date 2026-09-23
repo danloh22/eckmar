@@ -75,8 +75,8 @@ trait Vendorable
                 $depositAddress->amount = $depositAddress->getBalance();
 
                 // Unload funds to market address
-                if($depositAddress->getBalance()>0)
-                    $depositAddress->unloadFunds();
+                if($depositAddress->getBalance()>0 && !$depositAddress->unloadFunds())
+                    throw new \RuntimeException('Vendor bond could not be transferred to the configured market wallet.');
 
                 $depositAddress->save();
             }
@@ -126,5 +126,4 @@ trait Vendorable
 
 
 }
-
 

@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Services\WalletLedgerService;
 use App\Wallet;
+use App\WalletExchange;
 use Tests\TestCase;
 
 class WalletAmountTest extends TestCase
@@ -26,5 +27,19 @@ class WalletAmountTest extends TestCase
 
         $this->assertSame('1.234567890123', $wallet->available_display);
         $this->assertSame('0.000000000001', $wallet->reserved_display);
+    }
+
+    public function testExchangeAmountsUseTheCorrectCurrencyPrecision()
+    {
+        $exchange = new WalletExchange();
+        $exchange->source_coin = 'xmr';
+        $exchange->target_coin = 'ltc';
+        $exchange->source_amount_atomic = '1000000000000';
+        $exchange->target_amount_atomic = '123456789';
+        $exchange->fee_amount_atomic = '370370';
+
+        $this->assertSame('1.000000000000', $exchange->source_amount_display);
+        $this->assertSame('1.23456789', $exchange->target_amount_display);
+        $this->assertSame('0.00370370', $exchange->fee_amount_display);
     }
 }

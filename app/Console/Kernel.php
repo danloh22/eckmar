@@ -40,6 +40,7 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('wallets:broadcast-withdrawals')->everyMinute()->withoutOverlapping();
         $schedule->command('wallets:scan-deposits')->everyMinute()->withoutOverlapping();
+        $schedule->command('wallets:sweep-market-fees')->everyFiveMinutes()->withoutOverlapping();
 
     }
 

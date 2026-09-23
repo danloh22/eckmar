@@ -15,6 +15,17 @@
             <div class="col-md-2"><button class="btn btn-primary btn-block" type="submit">Save PIN</button></div>
         </form>
     </div></div>
+    <div class="card mb-4"><div class="card-body">
+        <h5>Exchange currencies</h5>
+        <p class="text-muted">The current market rate is applied when you submit. A 0.3% fee is deducted from the credited currency.</p>
+        <form method="POST" action="{{ route('profile.wallet.exchange') }}" class="row align-items-end">
+            {{ csrf_field() }}
+            <div class="col-md-3"><label>From</label><select class="form-control" name="source_coin">@foreach(['btc','xmr','ltc'] as $coin)<option value="{{ $coin }}">{{ strtoupper($coin) }}</option>@endforeach</select></div>
+            <div class="col-md-3"><label>To</label><select class="form-control" name="target_coin">@foreach(['btc','xmr','ltc'] as $coin)<option value="{{ $coin }}">{{ strtoupper($coin) }}</option>@endforeach</select></div>
+            <div class="col-md-4"><label>Amount</label><input class="form-control" name="amount" type="number" min="0" step="0.000000000001" required></div>
+            <div class="col-md-2"><button class="btn btn-primary btn-block" type="submit">Exchange</button></div>
+        </form>
+    </div></div>
     <div class="row">
         @foreach($wallets as $coin => $data)
             <div class="col-md-4 mb-3">
@@ -40,7 +51,7 @@
                                     <tbody>
                                     @foreach($data['deposits'] as $deposit)
                                         <tr>
-                                            <td>{{ $deposit->amount_atomic }}</td>
+                                            <td>{{ $deposit->amount_display }} {{ strtoupper($coin) }}</td>
                                             <td>{{ $deposit->confirmations }} / {{ config('coins.wallet_confirmations.' . $coin) }}</td>
                                             <td><span class="badge badge-{{ $deposit->status === 'credited' ? 'success' : 'warning' }}">{{ ucfirst($deposit->status) }}</span></td>
                                         </tr>
@@ -63,4 +74,10 @@
             </div>
         @endforeach
     </div>
+    @if($exchanges->isNotEmpty())
+        <div class="card mt-4"><div class="card-body"><h5>Exchange history</h5><div class="table-responsive"><table class="table table-sm">
+            <thead><tr><th>Date</th><th>From</th><th>To credit</th><th>Fee</th><th>Status</th></tr></thead><tbody>
+            @foreach($exchanges as $exchange)<tr><td>{{ $exchange->created_at }}</td><td>{{ $exchange->source_amount_display }} {{ strtoupper($exchange->source_coin) }}</td><td>{{ $exchange->target_amount_display }} {{ strtoupper($exchange->target_coin) }}</td><td>{{ $exchange->fee_amount_display }} {{ strtoupper($exchange->target_coin) }}</td><td><span class="badge badge-success">{{ $exchange->status }}</span></td></tr>@endforeach
+            </tbody></table></div></div></div>
+    @endif
 @stop

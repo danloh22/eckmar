@@ -29,7 +29,7 @@ class CreateWalletAccountingTables extends Migration
             $table->uuid('id')->primary();
             $table->uuid('wallet_id');
             $table->string('coin', 10);
-            $table->enum('type', ['deposit', 'withdrawal_hold', 'withdrawal', 'withdrawal_reversal', 'escrow_hold', 'escrow_release', 'dispute_release', 'admin_credit', 'admin_debit']);
+            $table->enum('type', ['deposit', 'withdrawal_hold', 'withdrawal', 'withdrawal_reversal', 'escrow_hold', 'escrow_release', 'dispute_release', 'exchange_debit', 'exchange_credit', 'exchange_fee', 'market_fee_credit', 'market_fee_hold', 'market_fee_sweep', 'admin_credit', 'admin_debit']);
             $table->decimal('available_delta_atomic', 36, 0)->default(0);
             $table->decimal('reserved_delta_atomic', 36, 0)->default(0);
             $table->string('reference_type', 60);
@@ -92,8 +92,10 @@ class CreateWalletAccountingTables extends Migration
             $table->uuid('id')->primary();
             $table->string('coin', 10)->unique();
             $table->text('address');
+            $table->uuid('wallet_id')->nullable()->unique();
             $table->uuid('updated_by')->nullable();
             $table->timestamps();
+            $table->foreign('wallet_id')->references('id')->on('wallets')->onDelete('restrict');
             $table->foreign('updated_by')->references('id')->on('users')->onDelete('set null');
         });
     }

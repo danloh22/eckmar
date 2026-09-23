@@ -11,6 +11,7 @@ Route::prefix('profile')->group(function(){
     Route::post('wallet/{coin}/address', 'WalletController@createDepositAddress')->name('profile.wallet.address.create');
     Route::post('wallet/{coin}/withdrawals', 'WalletController@requestWithdrawal')->middleware('throttle:5,1')->name('profile.wallet.withdrawals.create');
     Route::post('wallet/pin', 'WalletController@setWithdrawalPin')->middleware('throttle:5,1')->name('profile.wallet.pin');
+    Route::post('wallet/exchange', 'WalletController@exchange')->middleware('throttle:10,1')->name('profile.wallet.exchange');
     Route::post('changepassword', 'ProfileController@changePassword')-> name('profile.password.change'); // change password route
     Route::get('2fa/{turn}', 'ProfileController@change2fa') -> name('profile.2fa.change'); // change 2fa
 

@@ -28,6 +28,8 @@ return [
      */
     'market_fee_percent' => env('MARKET_FEE_PERCENT', 3),
 
+    'exchange_fee_percent' => env('EXCHANGE_FEE_PERCENT', 0.3),
+
     /**
      * Amount of USD that needs to be paid to the market in order to become vendor
      */

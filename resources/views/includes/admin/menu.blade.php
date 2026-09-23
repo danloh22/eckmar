@@ -11,6 +11,13 @@
     </a>
     @endhasAccess
 
+    @hasAccess('wallets')
+    <a class="nav-link @isroute('admin.wallet.exchanges') active @endisroute" href="{{ route('admin.wallet.exchanges') }}">
+        <i class="fas fa-exchange-alt mr-2"></i>
+        Wallet exchanges
+    </a>
+    @endhasAccess
+
     @hasAccess('categories')
     <a class="nav-link @isroute('admin.categories') active @endisroute" href="{{ route('admin.categories') }}">
         <i class="fas fa-list mr-2"></i>
