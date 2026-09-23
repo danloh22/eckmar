@@ -25,6 +25,10 @@ class SweepMarketFeesCommand extends Command
 
     public function handle()
     {
+        foreach (MarketFeeSweep::where('status', 'pending')->whereNull('resolution')->get() as $pending) {
+            $this->broadcast($pending);
+        }
+
         foreach (MarketFeeWallet::whereIn('coin', ['btc', 'xmr', 'ltc'])->get() as $destination) {
             $sweep = DB::transaction(function () use ($destination) {
                 $wallet = $this->ledger->marketWalletFor($destination->coin);
@@ -34,7 +38,9 @@ class SweepMarketFeesCommand extends Command
                     $earned = gmp_strval(gmp_add($earned, $amount));
                 }
                 $scheduled = '0';
-                foreach (MarketFeeSweep::where('wallet_id', $wallet->id)->pluck('amount_atomic') as $amount) {
+                foreach (MarketFeeSweep::where('wallet_id', $wallet->id)->where(function ($query) {
+                    $query->whereNull('resolution')->orWhere('resolution', '!=', 'refunded');
+                })->pluck('amount_atomic') as $amount) {
                     $scheduled = gmp_strval(gmp_add($scheduled, $amount));
                 }
                 $unswept = gmp_strval(gmp_sub($earned, $scheduled));

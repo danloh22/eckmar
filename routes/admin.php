@@ -13,6 +13,7 @@ Route::post('wallet/withdrawals/{withdrawal}/resolve-failed', 'Admin\WalletContr
 Route::get('wallet/exchanges', 'Admin\WalletController@exchanges')->name('admin.wallet.exchanges');
 Route::post('wallet/fee-addresses/{coin}', 'Admin\WalletController@updateFeeWallet')->name('admin.wallet.fee-addresses.update');
 Route::post('wallet/liquidity/{coin}', 'Admin\WalletController@adjustMarketLiquidity')->name('admin.wallet.liquidity.adjust');
+Route::post('wallet/fee-sweeps/{sweep}/resolve-failed', 'Admin\WalletController@resolveFailedFeeSweep')->name('admin.wallet.fee-sweeps.resolve-failed');
 
 // Categories routes
 Route::get('categories', 'Admin\AdminController@categories') -> name('admin.categories');

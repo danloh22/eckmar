@@ -6,6 +6,7 @@ use App\Services\WalletLedgerService;
 use App\Wallet;
 use App\WalletExchange;
 use App\WithdrawalRequest;
+use App\MarketFeeSweep;
 use Tests\TestCase;
 
 class WalletAmountTest extends TestCase
@@ -51,5 +52,12 @@ class WalletAmountTest extends TestCase
 
         $this->assertSame('1.23456789', $bitcoin->amount_display);
         $this->assertSame('1.000000000001', $monero->amount_display);
+    }
+
+    public function testFeeSweepAmountsUseTheCorrectCurrencyPrecision()
+    {
+        $sweep = new MarketFeeSweep(['coin' => 'ltc', 'amount_atomic' => '250000001']);
+
+        $this->assertSame('2.50000001', $sweep->amount_display);
     }
 }

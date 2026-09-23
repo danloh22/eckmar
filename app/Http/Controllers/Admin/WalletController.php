@@ -197,4 +197,33 @@ class WalletController extends Controller
         $this->ledger->book($wallet, $request->action === 'debit' ? 'admin_debit' : 'admin_credit', $delta, '0', 'market_liquidity_adjustment', null, 'market-liquidity-' . str_random(32), auth()->id(), $request->reason, true);
         return redirect()->route('admin.wallet.exchanges')->with('success', strtoupper($coin) . ' exchange liquidity adjusted.');
     }
+
+    public function resolveFailedFeeSweep(Request $request, MarketFeeSweep $sweep)
+    {
+        abort_unless(auth()->user()->isAdmin(), 403);
+        $request->validate([
+            'resolution' => 'required|in:retry,refund',
+            'reason' => 'required|string|min:10|max:500',
+        ]);
+
+        DB::transaction(function () use ($request, $sweep) {
+            $locked = MarketFeeSweep::where('id', $sweep->id)->lockForUpdate()->firstOrFail();
+            abort_unless($locked->status === 'failed' && $locked->resolution === null, 422);
+
+            if ($request->resolution === 'retry') {
+                $locked->status = 'pending';
+                $locked->error = null;
+                $locked->resolution_note = 'Retry authorized: ' . $request->reason;
+            } else {
+                $this->ledger->book($locked->wallet, 'market_fee_sweep', $locked->amount_atomic, '-' . $locked->amount_atomic, 'market_fee_sweep', $locked->id, 'market-fee-refund-' . $locked->id, auth()->id(), 'Failed fee sweep returned: ' . $request->reason, true);
+                $locked->resolution = 'refunded';
+                $locked->resolution_note = 'Reserved fees returned: ' . $request->reason;
+            }
+            $locked->resolved_by = auth()->id();
+            $locked->resolved_at = now();
+            $locked->save();
+        });
+
+        return redirect()->route('admin.wallet.exchanges')->with('success', 'Failed fee transfer resolution recorded.');
+    }
 }

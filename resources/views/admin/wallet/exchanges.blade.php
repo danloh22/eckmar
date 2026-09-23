@@ -39,8 +39,18 @@
         </tr>@empty<tr><td colspan="8" class="text-center">No exchanges yet.</td></tr>@endforelse</tbody>
     </table></div>{{ $exchanges->links() }}
     <h4 class="mt-4">Automatic fee transfers</h4>
+    <div class="alert alert-warning">Before retrying or refunding a failed fee transfer, verify the destination and transaction history directly in the coin node. An RPC timeout can occur after a transaction was accepted.</div>
     <div class="table-responsive"><table class="table table-sm">
-        <thead><tr><th>Date</th><th>Coin</th><th>Amount</th><th>Destination</th><th>Status</th><th>Transaction</th></tr></thead>
-        <tbody>@forelse($feeSweeps as $sweep)<tr><td>{{ $sweep->created_at }}</td><td>{{ strtoupper($sweep->coin) }}</td><td>{{ $sweep->amount_atomic }}</td><td class="text-break">{{ $sweep->destination_address }}</td><td>{{ $sweep->status }}</td><td class="text-break">{{ $sweep->transaction_hash ?: $sweep->error }}</td></tr>@empty<tr><td colspan="6" class="text-center">No fee transfers yet.</td></tr>@endforelse</tbody>
+        <thead><tr><th>Date</th><th>Coin</th><th>Amount</th><th>Destination</th><th>Status</th><th>Transaction</th><th>Action</th></tr></thead>
+        <tbody>@forelse($feeSweeps as $sweep)<tr><td>{{ $sweep->created_at }}</td><td>{{ strtoupper($sweep->coin) }}</td><td>{{ $sweep->amount_display }} {{ strtoupper($sweep->coin) }}</td><td class="text-break">{{ $sweep->destination_address }}</td><td>{{ $sweep->status }}@if($sweep->resolution)<br><span class="badge badge-secondary">{{ $sweep->resolution }}</span>@endif</td><td class="text-break">{{ $sweep->transaction_hash ?: $sweep->error }}@if($sweep->resolution_note)<div class="small text-muted">{{ $sweep->resolution_note }}</div>@endif</td><td>
+            @if($sweep->status === 'failed' && !$sweep->resolution && auth()->user()->isAdmin())
+                <form method="POST" action="{{ route('admin.wallet.fee-sweeps.resolve-failed', $sweep) }}">
+                    {{ csrf_field() }}
+                    <input class="form-control form-control-sm mb-2" name="reason" minlength="10" maxlength="500" placeholder="Node verification and audit reason" required>
+                    <button class="btn btn-sm btn-warning" name="resolution" value="retry" type="submit">Retry</button>
+                    <button class="btn btn-sm btn-outline-danger" name="resolution" value="refund" type="submit">Return to reserve</button>
+                </form>
+            @endif
+        </td></tr>@empty<tr><td colspan="7" class="text-center">No fee transfers yet.</td></tr>@endforelse</tbody>
     </table></div>
 @stop
