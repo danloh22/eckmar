@@ -33,7 +33,7 @@
     @endhasAccess
 
     @hasAccess('products')
-    <a class="nav-link @isroute('admin.product') active @endisroute" href="{{ route('admin.products') }}">
+    <a class="nav-link @isroute('admin.products') active @endisroute @isroute('admin.product.edit') active @endisroute" href="{{ route('admin.products') }}">
         <i class="fas fa-shopping-bag mr-2"></i>
         Products
     </a>
@@ -41,7 +41,7 @@
 
     @hasAccess('products')
     @isModuleEnabled('FeaturedProducts')
-    <a class="nav-link @isroute('admin.featuredproducts') active @endisroute" href="{{ route('admin.featuredproducts.show') }}">
+    <a class="nav-link @isroute('admin.featuredproducts.show') active @endisroute" href="{{ route('admin.featuredproducts.show') }}">
         <i class="fas fa-medal mr-2"></i>
         Featured Products
     </a>

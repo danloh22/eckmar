@@ -45,7 +45,7 @@
         <i class="mr-2 far fa-comments"></i>
         Messages
     </a>
-    <a href="{{ route('profile.notifications') }}" class="nav-link @isroute('profile.notification') active @endisroute" data-toggle="pill">
+    <a href="{{ route('profile.notifications') }}" class="nav-link @isroute('profile.notifications') active @endisroute" data-toggle="pill">
     <i class="mr-2 far fa-bell"></i>
     Notifications
     </a>

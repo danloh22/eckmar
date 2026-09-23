@@ -9,8 +9,8 @@ Route::prefix('profile')->group(function(){
     Route::get('index','ProfileController@index')->name('profile.index');
     Route::get('wallet', 'WalletController@index')->name('profile.wallet');
     Route::post('wallet/{coin}/address', 'WalletController@createDepositAddress')->name('profile.wallet.address.create');
-    Route::post('wallet/{coin}/withdrawals', 'WalletController@requestWithdrawal')->name('profile.wallet.withdrawals.create');
-    Route::post('wallet/pin', 'WalletController@setWithdrawalPin')->name('profile.wallet.pin');
+    Route::post('wallet/{coin}/withdrawals', 'WalletController@requestWithdrawal')->middleware('throttle:5,1')->name('profile.wallet.withdrawals.create');
+    Route::post('wallet/pin', 'WalletController@setWithdrawalPin')->middleware('throttle:5,1')->name('profile.wallet.pin');
     Route::post('changepassword', 'ProfileController@changePassword')-> name('profile.password.change'); // change password route
     Route::get('2fa/{turn}', 'ProfileController@change2fa') -> name('profile.2fa.change'); // change 2fa
 
@@ -82,7 +82,7 @@ Route::prefix('profile')->group(function(){
     Route::get('cart/clear', 'ProfileController@clearCart') -> name('profile.cart.clear');
     Route::get('cart/remove/{product}', 'ProfileController@removeProduct') -> name('profile.cart.remove');
     Route::get('checkout', 'ProfileController@checkout') -> name('profile.cart.checkout');
-    Route::get('make/purchase', 'ProfileController@makePurchases') -> name('profile.cart.make.purchases');
+    Route::post('make/purchase', 'ProfileController@makePurchases') -> name('profile.cart.make.purchases');
 
     // Purchases routes
     Route::get('purchases/{state?}', 'ProfileController@purchases') -> name('profile.purchases');

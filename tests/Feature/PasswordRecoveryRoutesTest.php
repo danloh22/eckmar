@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+
 class PasswordRecoveryRoutesTest extends TestCase
 {
     /**

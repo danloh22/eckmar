@@ -54,23 +54,27 @@ class ScanWalletDepositsCommand extends Command
             ]);
 
             $deposit = WalletDeposit::where('id', $deposit->id)->lockForUpdate()->firstOrFail();
+            if ($deposit->wallet_id !== $address->wallet_id || $deposit->deposit_address_id !== $address->id || gmp_cmp($deposit->amount_atomic, $transfer['amount_atomic']) !== 0) {
+                throw new \RuntimeException('Deposit identity or amount changed during RPC reconciliation.');
+            }
+            $wallet = $deposit->wallet;
             $deposit->confirmations = $transfer['confirmations'];
             $deposit->block_height = $transfer['block_height'];
             $required = (int) config('coins.wallet_confirmations.' . $address->coin, 10);
 
             if ($deposit->status === 'credited' && $deposit->confirmations < $required) {
                 $deposit->status = 'reorged';
-                $address->wallet->status = 'frozen';
-                $address->wallet->save();
-                $address->wallet->user->notify('Your wallet was frozen because a confirmed deposit lost confirmations. Support will review it.', 'profile.wallet');
+                $wallet->status = 'frozen';
+                $wallet->save();
+                $wallet->user->notify('Your wallet was frozen because a confirmed deposit lost confirmations. Support will review it.', 'profile.wallet');
                 foreach (Admin::allUsers() as $admin) {
                     $admin->notify('A credited ' . strtoupper($address->coin) . ' deposit lost confirmations; wallet ' . $address->wallet_id . ' was frozen.', 'admin.wallet.withdrawals');
                 }
             } elseif ($deposit->status !== 'credited' && $deposit->confirmations >= $required) {
-                $this->ledger->book($address->wallet, 'deposit', $deposit->amount_atomic, '0', 'wallet_deposit', $deposit->id, 'deposit-' . $address->coin . '-' . $deposit->transaction_hash . '-' . $deposit->transaction_output);
+                $this->ledger->book($wallet, 'deposit', $deposit->amount_atomic, '0', 'wallet_deposit', $deposit->id, 'deposit-' . $address->coin . '-' . $deposit->transaction_hash . '-' . $deposit->transaction_output);
                 $deposit->status = 'credited';
                 $deposit->credited_at = now();
-                $address->wallet->user->notify('Your ' . strtoupper($address->coin) . ' deposit is now available.', 'profile.wallet');
+                $wallet->user->notify('Your ' . strtoupper($address->coin) . ' deposit is now available.', 'profile.wallet');
             } elseif ($deposit->status !== 'credited') {
                 $deposit->status = $deposit->confirmations > 0 ? 'confirming' : 'detected';
             }

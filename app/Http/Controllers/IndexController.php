@@ -51,10 +51,6 @@ class IndexController extends Controller
         return redirect()->route('auth.signin');
     }
 
-    public function confirmation(Request $request) {
-        return view('confirmation');
-    }
-
     /**
      * Show category page
      *

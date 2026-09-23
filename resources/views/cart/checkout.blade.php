@@ -90,7 +90,8 @@
             {{--</form>--}}
         {{--</div>--}}
         <div class="col-md-12 mt-3 justify-content-end text-right">
-            <form action="{{ route('profile.cart.make.purchases') }}">
+            <form action="{{ route('profile.cart.make.purchases') }}" method="POST">
+                {{ csrf_field() }}
                 {{--<input type="hidden" name="cointype" value="btc">--}}
                 <button type="submit"  class="btn btn-mblue btn-lg">
                     <i class="fas fa-shopping-cart mr-2"></i>

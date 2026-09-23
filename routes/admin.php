@@ -27,6 +27,7 @@ Route::post('users/edit/group/{user}','Admin\UserController@editUserGroup')->nam
 Route::post('users/edit/info/{user}','Admin\UserController@editBasicInfo')->name('admin.user.edit.info');
 
 Route::post('users/ban/{user}', 'Admin\UserController@banUser')->name('admin.user.ban');
+Route::post('users/{user}/withdrawal-pin/reset', 'Admin\UserController@resetWithdrawalPin')->name('admin.user.withdrawal-pin.reset');
 Route::get('users/remove/ban/{ban}', 'Admin\UserController@removeBan')->name('admin.ban.remove');
 
 
