@@ -115,29 +115,7 @@ trait Purchasable {
      * Releasing sent purchases and making the purchase delivered
      */
     public function release(){
-        // state must be 'sent' to be delivered
-        throw_unless($this->state=='sent', new RequestException('This purchase is already delivered!'));
-
-
-        try{
-            $this->state = 'delivered';
-            $this -> save();
-
-            // state now must be delivered
-            throw_unless($this->state=='delivered', new \Exception('This purchase is already delivered!'));
-            $this -> getPayment() -> delivered();
-
-            event(new ProductDelivered($this));
-        }
-        catch (\Exception $e){
-            // return to before state
-            $this->state='sent';
-            $this->save();
-
-            // logout the exception message
-            Log::error("Purchase $this->id " . $e ->getMessage());
-            throw new RequestException('Error happened! Please try again later!');
-        }
+        $this->settleDeliveredPurchase();
     }
 
     /**
@@ -187,32 +165,38 @@ trait Purchasable {
 
         throw_if($this->type!='normal', new RequestException('This purchase must be Escrow type!'));
 
-        // state must be 'sent' to be delivered
-        throw_unless($this->state=='sent', new RequestException('This purchase is already delivered!'));
+        $this->settleDeliveredPurchase();
 
+    }
 
-        try{
-            $this->state = 'delivered';
-            $this -> save();
+    /**
+     * Atomically settle a sent purchase and its wallet escrow hold.
+     * The row lock prevents concurrent buyer and scheduler releases from
+     * overwriting a completed purchase back to the sent state.
+     */
+    private function settleDeliveredPurchase()
+    {
+        try {
+            $settled = DB::transaction(function () {
+                $purchase = self::where('id', $this->id)->lockForUpdate()->firstOrFail();
+                throw_unless($purchase->state === 'sent', new RequestException('This purchase is not awaiting delivery.'));
 
-            // state now must be delivered
-            throw_unless($this->state=='delivered', new \Exception('This purchase is already delivered!'));
-            $this -> getPayment() -> delivered();
+                $purchase->state = 'delivered';
+                $purchase->save();
+                $purchase->getPayment()->delivered();
 
-            event(new ProductDelivered($this));
+                return $purchase;
+            });
+
+            $this->refresh();
+            event(new ProductDelivered($settled));
+        } catch (\Exception $exception) {
+            Log::error("Purchase $this->id settlement failed: " . $exception->getMessage());
+            if ($exception instanceof RequestException) {
+                throw $exception;
+            }
+            throw new RequestException('The purchase could not be settled. Please try again later.');
         }
-        catch (\Exception $e){
-            // return to before state
-            $this->state='sent';
-            $this->save();
-
-            // logout the exception message
-
-            Log::error("Purchase $this->id :" . $e ->getMessage());
-
-            throw new RequestException('Error happened! Please try again later!');
-        }
-
     }
 
     /**
