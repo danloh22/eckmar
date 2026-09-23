@@ -146,5 +146,33 @@ class BitcoinPayment implements Coin
         return 'btc';
     }
 
+    public function incomingTransfers(string $address): array
+    {
+        $transactions = $this->bitcoind->listtransactions('*', 1000, 0, true);
+        if ($this->bitcoind->error) {
+            throw new \Exception($this->bitcoind->error);
+        }
+
+        $incoming = [];
+        foreach ((array) $transactions as $transaction) {
+            if (($transaction['category'] ?? null) !== 'receive' || ($transaction['address'] ?? null) !== $address) {
+                continue;
+            }
+            $incoming[] = [
+                'transaction_hash' => $transaction['txid'],
+                'transaction_output' => (string) ($transaction['vout'] ?? 0),
+                'amount_atomic' => $this->coinToAtomic($transaction['amount']),
+                'confirmations' => max(0, (int) ($transaction['confirmations'] ?? 0)),
+                'block_height' => null,
+            ];
+        }
+        return $incoming;
+    }
+
+    private function coinToAtomic($amount): string
+    {
+        return str_replace('.', '', number_format((float) $amount, config('coins.atomic_decimals.' . $this->coinLabel()), '.', ''));
+    }
+
 
 }

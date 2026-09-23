@@ -17,4 +17,9 @@ class WalletDeposit extends Model
     {
         return $this->belongsTo(Wallet::class);
     }
+
+    public function depositAddress()
+    {
+        return $this->belongsTo(DepositAddress::class);
+    }
 }

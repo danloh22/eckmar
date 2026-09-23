@@ -32,6 +32,23 @@
                                 <button class="btn btn-outline-primary btn-block" type="submit">Create deposit address</button>
                             </form>
                         @endif
+                        @if($data['deposits']->isNotEmpty())
+                            <h6 class="mt-3">Recent deposits</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead><tr><th>Amount</th><th>Confirmations</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                    @foreach($data['deposits'] as $deposit)
+                                        <tr>
+                                            <td>{{ $deposit->amount_atomic }}</td>
+                                            <td>{{ $deposit->confirmations }} / {{ config('coins.wallet_confirmations.' . $coin) }}</td>
+                                            <td><span class="badge badge-{{ $deposit->status === 'credited' ? 'success' : 'warning' }}">{{ ucfirst($deposit->status) }}</span></td>
+                                        </tr>
+                                    @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
                         <hr>
                         <form method="POST" action="{{ route('profile.wallet.withdrawals.create', $coin) }}">
                             {{ csrf_field() }}

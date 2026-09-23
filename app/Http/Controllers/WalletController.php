@@ -29,6 +29,7 @@ class WalletController extends Controller
             $wallets[$coin] = [
                 'wallet' => $wallet,
                 'address' => DepositAddress::where('wallet_id', $wallet->id)->where('active', true)->latest()->first(),
+                'deposits' => $wallet->deposits()->latest()->limit(10)->get(),
             ];
         }
 

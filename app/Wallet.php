@@ -22,4 +22,9 @@ class Wallet extends Model
     {
         return $this->hasMany(WalletLedgerEntry::class);
     }
+
+    public function deposits()
+    {
+        return $this->hasMany(WalletDeposit::class);
+    }
 }
