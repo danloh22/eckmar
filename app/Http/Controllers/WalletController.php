@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\DepositAddress;
 use App\Admin;
+use App\Ticket;
+use App\TicketReply;
 use App\Exceptions\RequestException;
 use App\Marketplace\Payment\Payment;
 use App\Services\WalletLedgerService;
@@ -121,6 +123,27 @@ class WalletController extends Controller
         $user->save();
 
         return redirect()->route('profile.wallet')->with('success', 'Withdrawal PIN saved.');
+    }
+
+    public function requestWithdrawalPinReset()
+    {
+        $user = auth()->user();
+        $title = '[PRIORITY] Withdrawal PIN reset';
+        $ticket = Ticket::where('user_id', $user->id)
+            ->where('title', $title)
+            ->where('solved', false)
+            ->first();
+
+        if (!$ticket) {
+            $ticket = Ticket::openTicket($title);
+            TicketReply::postReply($ticket, 'I cannot reset my withdrawal PIN with my mnemonic and need administrator assistance.');
+        }
+
+        foreach (Admin::allUsers() as $admin) {
+            $admin->notify('Priority request: ' . $user->username . ' needs a withdrawal PIN reset.', 'admin.tickets.view', $ticket->id);
+        }
+
+        return redirect()->route('profile.wallet')->with('success', 'Your priority PIN reset request was sent to support and the administrators.');
     }
 
     public function exchange(Request $request)

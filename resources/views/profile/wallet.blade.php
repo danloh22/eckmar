@@ -9,11 +9,19 @@
         <h5>Set or reset withdrawal PIN</h5>
         <form method="POST" action="{{ route('profile.wallet.pin') }}" class="row">
             {{ csrf_field() }}
-            <div class="col-md-4"><input class="form-control mb-2" name="mnemonic" placeholder="Mnemonic" required></div>
-            <div class="col-md-3"><input class="form-control mb-2" name="pin" inputmode="numeric" maxlength="6" placeholder="New 6-digit PIN" required></div>
-            <div class="col-md-3"><input class="form-control mb-2" name="pin_confirmation" inputmode="numeric" maxlength="6" placeholder="Confirm PIN" required></div>
+            <div class="col-md-4"><input class="form-control mb-2" type="password" name="mnemonic" autocomplete="off" placeholder="Mnemonic" required></div>
+            <div class="col-md-3"><input class="form-control mb-2" type="password" name="pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="New 6-digit PIN" required></div>
+            <div class="col-md-3"><input class="form-control mb-2" type="password" name="pin_confirmation" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="Confirm PIN" required></div>
             <div class="col-md-2"><button class="btn btn-primary btn-block" type="submit">Save PIN</button></div>
         </form>
+        <hr>
+        <div class="d-flex flex-wrap align-items-center justify-content-between">
+            <p class="text-muted mb-2 mb-md-0">Mnemonic reset not working? Send a priority request to support and the administrators.</p>
+            <form method="POST" action="{{ route('profile.wallet.pin.support') }}">
+                {{ csrf_field() }}
+                <button class="btn btn-outline-danger" type="submit">Request administrator reset</button>
+            </form>
+        </div>
     </div></div>
     <div class="card mb-4"><div class="card-body">
         <h5>Exchange currencies</h5>
@@ -66,7 +74,7 @@
                             <label>Withdraw {{ strtoupper($coin) }}</label>
                             <input class="form-control mb-2" name="amount" type="number" min="0" step="{{ $coin === 'xmr' ? '0.000000000001' : '0.00000001' }}" placeholder="Amount in {{ strtoupper($coin) }}" required>
                             <input class="form-control mb-2" name="destination_address" placeholder="Destination address" required>
-                            <input class="form-control mb-2" name="pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit withdrawal PIN" required>
+                            <input class="form-control mb-2" type="password" name="pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="6-digit withdrawal PIN" required>
                             <button class="btn btn-outline-secondary btn-block" type="submit">Request withdrawal</button>
                         </form>
                     </div>

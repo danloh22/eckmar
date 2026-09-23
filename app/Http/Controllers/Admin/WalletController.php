@@ -8,6 +8,8 @@ use App\WithdrawalRequest;
 use App\MarketFeeWallet;
 use App\MarketFeeSweep;
 use App\WalletExchange;
+use App\Wallet;
+use App\Exceptions\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -28,6 +30,54 @@ class WalletController extends Controller
         return view('admin.wallet.withdrawals', [
             'withdrawals' => WithdrawalRequest::with('wallet.user')->whereIn('status', ['pending_approval', 'approved', 'broadcasting', 'failed'])->latest()->paginate(30),
         ]);
+    }
+
+    public function wallets(Request $request)
+    {
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->hasPermission('wallets'), 403);
+        $wallets = Wallet::with(['user', 'depositAddresses'])->whereNotNull('user_id');
+        if ($request->filled('coin') && in_array($request->coin, ['btc', 'xmr', 'ltc'], true)) {
+            $wallets->where('coin', $request->coin);
+        }
+        if ($request->filled('username')) {
+            $wallets->whereHas('user', function ($query) use ($request) {
+                $query->where('username', 'like', '%' . $request->username . '%');
+            });
+        }
+        return view('admin.wallet.index', ['wallets' => $wallets->latest()->paginate(50)]);
+    }
+
+    public function setWalletStatus(Wallet $wallet, string $status)
+    {
+        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(in_array($status, ['active', 'frozen'], true), 422);
+        abort_if($wallet->user_id === null, 422);
+        $wallet->status = $status;
+        $wallet->save();
+        $wallet->user->notify('Your ' . strtoupper($wallet->coin) . ' wallet was ' . ($status === 'frozen' ? 'frozen' : 'unfrozen') . ' by an administrator.', 'profile.wallet');
+        return redirect()->back()->with('success', 'Wallet status updated.');
+    }
+
+    public function adjustWallet(Request $request, Wallet $wallet)
+    {
+        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_if($wallet->user_id === null, 422);
+        $decimals = (int) config('coins.atomic_decimals.' . $wallet->coin);
+        $request->validate([
+            'action' => 'required|in:credit,debit',
+            'amount' => ['required', 'regex:/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,' . $decimals . '})?$/'],
+            'reason' => 'required|string|min:10|max:500',
+        ]);
+        $amount = $this->ledger->coinToAtomic($request->amount, $wallet->coin);
+        abort_if(gmp_cmp($amount, '0') <= 0, 422);
+        $delta = $request->action === 'debit' ? '-' . $amount : $amount;
+        try {
+            $this->ledger->book($wallet, $request->action === 'debit' ? 'admin_debit' : 'admin_credit', $delta, '0', 'admin_wallet_adjustment', null, 'admin-wallet-' . str_random(32), auth()->id(), $request->reason, true);
+        } catch (RequestException $exception) {
+            return redirect()->back()->withInput()->with('errormessage', $exception->getMessage());
+        }
+        $wallet->user->notify('An administrator ' . ($request->action === 'debit' ? 'debited' : 'credited') . ' your ' . strtoupper($wallet->coin) . ' wallet. Reason: ' . $request->reason, 'profile.wallet');
+        return redirect()->back()->with('success', 'Wallet balance adjusted.');
     }
 
     public function approve(WithdrawalRequest $withdrawal)

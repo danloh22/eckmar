@@ -12,6 +12,10 @@
     @endhasAccess
 
     @hasAccess('wallets')
+    <a class="nav-link @isroute('admin.wallets') active @endisroute" href="{{ route('admin.wallets') }}">
+        <i class="fas fa-coins mr-2"></i>
+        User wallets
+    </a>
     <a class="nav-link @isroute('admin.wallet.exchanges') active @endisroute" href="{{ route('admin.wallet.exchanges') }}">
         <i class="fas fa-exchange-alt mr-2"></i>
         Wallet exchanges

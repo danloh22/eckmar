@@ -4,6 +4,9 @@
 Route::get('index', 'Admin\AdminController@index') -> name('admin.index');
 
 Route::get('wallet/withdrawals', 'Admin\WalletController@withdrawals')->name('admin.wallet.withdrawals');
+Route::get('wallets', 'Admin\WalletController@wallets')->name('admin.wallets');
+Route::post('wallets/{wallet}/status/{status}', 'Admin\WalletController@setWalletStatus')->name('admin.wallets.status');
+Route::post('wallets/{wallet}/adjust', 'Admin\WalletController@adjustWallet')->name('admin.wallets.adjust');
 Route::post('wallet/withdrawals/{withdrawal}/approve', 'Admin\WalletController@approve')->name('admin.wallet.withdrawals.approve');
 Route::post('wallet/withdrawals/{withdrawal}/reject', 'Admin\WalletController@reject')->name('admin.wallet.withdrawals.reject');
 Route::get('wallet/exchanges', 'Admin\WalletController@exchanges')->name('admin.wallet.exchanges');

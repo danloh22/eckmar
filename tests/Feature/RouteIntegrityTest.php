@@ -26,8 +26,11 @@ class RouteIntegrityTest extends TestCase
     public function testWalletExchangeAndFeeAddressUpdatesArePostOnly()
     {
         $this->assertSame(['POST'], Route::getRoutes()->getByName('profile.wallet.exchange')->methods());
+        $this->assertSame(['POST'], Route::getRoutes()->getByName('profile.wallet.pin.support')->methods());
         $this->assertSame(['POST'], Route::getRoutes()->getByName('admin.wallet.fee-addresses.update')->methods());
         $this->assertSame(['POST'], Route::getRoutes()->getByName('admin.wallet.liquidity.adjust')->methods());
+        $this->assertSame(['POST'], Route::getRoutes()->getByName('admin.wallets.status')->methods());
+        $this->assertSame(['POST'], Route::getRoutes()->getByName('admin.wallets.adjust')->methods());
     }
 
     public function testEveryNamedRouteNameIsUnique()
