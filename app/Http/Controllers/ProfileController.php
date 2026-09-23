@@ -309,7 +309,7 @@ class ProfileController extends Controller
     public function removeProduct(Product $product)
     {
         Cart::getCart() -> removeFromCart($product);
-        session() -> flash('You have removed a product.');
+        session()->flash('success', 'You have removed a product.');
 
         return redirect() -> back();
     }
@@ -321,10 +321,15 @@ class ProfileController extends Controller
      */
     public function checkout()
     {
+        if (Cart::getCart()->numberOfItems() === 0) {
+            return redirect()->route('profile.cart')->with('errormessage', 'Add at least one product before opening checkout.');
+        }
+
         return view('cart.checkout', [
             'items' => Cart::getCart() -> items(),
             'totalSum' => Cart::getCart() -> total(),
             'numberOfItems' => Cart::getCart()->numberOfItems(),
+            'wallets' => auth()->user()->wallets()->whereIn('coin', ['btc', 'xmr', 'ltc'])->get()->keyBy('coin'),
 
         ]);
     }

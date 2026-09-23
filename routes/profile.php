@@ -81,8 +81,8 @@ Route::prefix('profile')->group(function(){
     // Cart routes
     Route::get('cart', 'ProfileController@cart') -> name('profile.cart');
     Route::post('cart/{product}/add', 'ProfileController@addToCart') -> name('profile.cart.add');
-    Route::get('cart/clear', 'ProfileController@clearCart') -> name('profile.cart.clear');
-    Route::get('cart/remove/{product}', 'ProfileController@removeProduct') -> name('profile.cart.remove');
+    Route::post('cart/clear', 'ProfileController@clearCart') -> name('profile.cart.clear');
+    Route::post('cart/remove/{product}', 'ProfileController@removeProduct') -> name('profile.cart.remove');
     Route::get('checkout', 'ProfileController@checkout') -> name('profile.cart.checkout');
     Route::post('make/purchase', 'ProfileController@makePurchases') -> name('profile.cart.make.purchases');
 

@@ -1,9 +1,10 @@
-<div class="card mt-5 profile-card border border-secondary" >
+<div class="card mt-5 profile-card market-panel" >
     <div class="card-body">
 
         <div class="row">
             <div class="col-sm-3">
-                <h4><a href="{{ route('vendor.show', $vendor) }}" style="color: black">{{ $vendor -> username }}</a></h4>
+                <span class="market-eyebrow">Verified marketplace profile</span>
+                <h4><a href="{{ route('vendor.show', $vendor) }}">{{ $vendor -> username }}</a></h4>
                 <p> <span class="btn @if($vendor->vendor->experience >= 0) btn-primary @else btn-danger @endif active" style="cursor:default">Level {{$vendor->vendor->getLevel()}}</span>
                     <span class="@if($vendor->vendor->experience < 0) text-danger @endif">({{$vendor->vendor->getShortXP()}} XP)</span></p>
                 @if($vendor->vendor->isTrusted())

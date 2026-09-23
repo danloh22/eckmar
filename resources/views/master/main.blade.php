@@ -15,7 +15,7 @@
     @endif
 
 </head>
-<body class="pb-4">
+<body class="market-body">
 @include('master.navbar')
 @include('master.search')
 
