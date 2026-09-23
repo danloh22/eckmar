@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Services\WalletLedgerService;
 use App\Wallet;
 use App\WalletExchange;
+use App\WithdrawalRequest;
 use Tests\TestCase;
 
 class WalletAmountTest extends TestCase
@@ -41,5 +42,14 @@ class WalletAmountTest extends TestCase
         $this->assertSame('1.000000000000', $exchange->source_amount_display);
         $this->assertSame('1.23456789', $exchange->target_amount_display);
         $this->assertSame('0.00370370', $exchange->fee_amount_display);
+    }
+
+    public function testWithdrawalAmountsUseTheCorrectCurrencyPrecision()
+    {
+        $bitcoin = new WithdrawalRequest(['coin' => 'btc', 'amount_atomic' => '123456789']);
+        $monero = new WithdrawalRequest(['coin' => 'xmr', 'amount_atomic' => '1000000000001']);
+
+        $this->assertSame('1.23456789', $bitcoin->amount_display);
+        $this->assertSame('1.000000000001', $monero->amount_display);
     }
 }

@@ -37,6 +37,7 @@ class WalletController extends Controller
                 'wallet' => $wallet,
                 'address' => DepositAddress::where('wallet_id', $wallet->id)->where('active', true)->latest()->first(),
                 'deposits' => $wallet->deposits()->latest()->limit(10)->get(),
+                'withdrawals' => $wallet->withdrawals()->latest()->limit(10)->get(),
             ];
         }
 
@@ -148,10 +149,14 @@ class WalletController extends Controller
 
     public function exchange(Request $request)
     {
+        $sourceCoin = $request->input('source_coin');
+        $sourceDecimals = in_array($sourceCoin, ['btc', 'xmr', 'ltc'], true)
+            ? (int) config('coins.atomic_decimals.' . $sourceCoin)
+            : 12;
         $request->validate([
             'source_coin' => 'required|in:btc,xmr,ltc',
             'target_coin' => 'required|in:btc,xmr,ltc|different:source_coin',
-            'amount' => 'required|regex:/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,12})?$/',
+            'amount' => ['required', 'regex:/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,' . $sourceDecimals . '})?$/'],
         ]);
         try {
             $this->exchange->exchange(auth()->user(), $request->source_coin, $request->target_coin, $request->amount);

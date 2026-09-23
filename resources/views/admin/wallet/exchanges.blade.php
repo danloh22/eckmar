@@ -3,6 +3,7 @@
 @section('admin-content')
     @include('includes.flash.success')
     @include('includes.flash.error')
+    @include('includes.flash.invalid')
     <h3 class="mb-4">Wallet exchanges and fee addresses</h3>
     @if(auth()->user()->isAdmin())
         <div class="row mb-4">

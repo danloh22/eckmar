@@ -135,9 +135,10 @@ class WalletController extends Controller
     {
         abort_unless(auth()->user()->isAdmin(), 403);
         abort_unless(in_array($coin, ['btc', 'xmr', 'ltc'], true), 404);
+        $decimals = (int) config('coins.atomic_decimals.' . $coin);
         $request->validate([
             'action' => 'required|in:credit,debit',
-            'amount' => 'required|regex:/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,12})?$/',
+            'amount' => ['required', 'regex:/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,' . $decimals . '})?$/'],
             'reason' => 'required|string|min:10|max:500',
         ]);
         $wallet = $this->ledger->marketWalletFor($coin);

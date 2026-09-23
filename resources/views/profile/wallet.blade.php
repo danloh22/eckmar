@@ -3,6 +3,9 @@
 @section('title', 'Wallet')
 
 @section('profile-content')
+    @include('includes.flash.success')
+    @include('includes.flash.error')
+    @include('includes.flash.invalid')
     <h3 class="mb-4">Wallet</h3>
     <div class="alert alert-info">Deposits become available after 10 network confirmations. Withdrawals require your PIN and administrator approval.</div>
     <div class="card mb-4"><div class="card-body">
@@ -77,6 +80,22 @@
                             <input class="form-control mb-2" type="password" name="pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="6-digit withdrawal PIN" required>
                             <button class="btn btn-outline-secondary btn-block" type="submit">Request withdrawal</button>
                         </form>
+                        @if($data['withdrawals']->isNotEmpty())
+                            <h6 class="mt-3">Recent withdrawals</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead><tr><th>Amount</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                    @foreach($data['withdrawals'] as $withdrawal)
+                                        <tr>
+                                            <td>{{ $withdrawal->amount_display }} {{ strtoupper($coin) }}</td>
+                                            <td><span class="badge badge-{{ $withdrawal->status === 'broadcast' ? 'success' : ($withdrawal->status === 'failed' || $withdrawal->status === 'rejected' ? 'danger' : 'warning') }}">{{ str_replace('_', ' ', $withdrawal->status) }}</span></td>
+                                        </tr>
+                                    @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>

@@ -3,6 +3,7 @@
 @section('admin-content')
     @include('includes.flash.success')
     @include('includes.flash.error')
+    @include('includes.flash.invalid')
     <h3>User wallets</h3>
     <form method="GET" class="form-row mb-3">
         <div class="col-md-5"><input class="form-control" name="username" value="{{ request('username') }}" placeholder="Username"></div>

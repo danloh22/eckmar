@@ -33,6 +33,11 @@ class Wallet extends Model
         return $this->hasMany(DepositAddress::class);
     }
 
+    public function withdrawals()
+    {
+        return $this->hasMany(WithdrawalRequest::class);
+    }
+
     public function getAvailableDisplayAttribute(): string
     {
         return $this->formatAtomic($this->available_atomic);
