@@ -65,10 +65,14 @@ class WalletController extends Controller
     {
         abort_unless(in_array($coin, ['btc', 'xmr', 'ltc'], true), 404);
         $request->validate([
-            'amount_atomic' => 'required|regex:/^[1-9][0-9]*$/',
+            'amount' => ['required', 'regex:/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,' . config('coins.atomic_decimals.' . $coin) . '})?$/'],
             'destination_address' => 'required|string|max:255',
             'pin' => 'required|digits:6',
         ]);
+        $amountAtomic = $this->ledger->coinToAtomic($request->amount, $coin);
+        if (gmp_cmp($amountAtomic, '0') <= 0) {
+            return redirect()->back()->withInput()->with('errormessage', 'The withdrawal amount must be greater than zero.');
+        }
 
         $user = auth()->user();
         if (!$user->withdrawal_pin || !Hash::check($request->pin, $user->withdrawal_pin)) {
@@ -76,15 +80,15 @@ class WalletController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($coin, $request, $user) {
+            DB::transaction(function () use ($coin, $request, $user, $amountAtomic) {
                 $wallet = $this->ledger->walletFor($user->id, $coin);
                 $withdrawal = WithdrawalRequest::create([
                     'wallet_id' => $wallet->id,
                     'coin' => $coin,
                     'destination_address' => $request->destination_address,
-                    'amount_atomic' => $request->amount_atomic,
+                    'amount_atomic' => $amountAtomic,
                 ]);
-                $this->ledger->book($wallet, 'withdrawal_hold', '-' . $request->amount_atomic, $request->amount_atomic, 'withdrawal_request', $withdrawal->id, 'withdrawal-hold-' . $withdrawal->id, $user->id);
+                $this->ledger->book($wallet, 'withdrawal_hold', '-' . $amountAtomic, $amountAtomic, 'withdrawal_request', $withdrawal->id, 'withdrawal-hold-' . $withdrawal->id, $user->id);
             });
         } catch (\Exception $exception) {
             report($exception);

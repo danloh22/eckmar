@@ -27,4 +27,21 @@ class Wallet extends Model
     {
         return $this->hasMany(WalletDeposit::class);
     }
+
+    public function getAvailableDisplayAttribute(): string
+    {
+        return $this->formatAtomic($this->available_atomic);
+    }
+
+    public function getReservedDisplayAttribute(): string
+    {
+        return $this->formatAtomic($this->reserved_atomic);
+    }
+
+    private function formatAtomic($amount): string
+    {
+        $decimals = (int) config('coins.atomic_decimals.' . $this->coin, 8);
+        $value = str_pad((string) $amount, $decimals + 1, '0', STR_PAD_LEFT);
+        return substr($value, 0, -$decimals) . '.' . substr($value, -$decimals);
+    }
 }

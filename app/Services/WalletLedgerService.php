@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Exceptions\RequestException;
 use App\Wallet;
+use App\Purchase;
+use App\User;
+use App\WalletEscrowHold;
 use App\WalletLedgerEntry;
 use Illuminate\Support\Facades\DB;
 
@@ -12,6 +15,79 @@ class WalletLedgerService
     public function walletFor($userId, string $coin): Wallet
     {
         return Wallet::firstOrCreate(['user_id' => $userId, 'coin' => $coin], ['status' => 'active']);
+    }
+
+    public function reservePurchase(Purchase $purchase): WalletEscrowHold
+    {
+        $amount = $this->coinToAtomic($purchase->to_pay, $purchase->coin_name);
+        $wallet = $this->walletFor($purchase->buyer_id, $purchase->coin_name);
+
+        $this->book($wallet, 'escrow_hold', '-' . $amount, $amount, 'purchase', $purchase->id, 'purchase-hold-' . $purchase->id, $purchase->buyer_id);
+
+        return WalletEscrowHold::firstOrCreate(['purchase_id' => $purchase->id], [
+            'buyer_wallet_id' => $wallet->id,
+            'coin' => $purchase->coin_name,
+            'amount_atomic' => $amount,
+            'status' => 'active',
+        ]);
+    }
+
+    public function releasePurchase(Purchase $purchase, User $recipient, string $type = 'escrow_release')
+    {
+        DB::transaction(function () use ($purchase, $recipient, $type) {
+            $hold = WalletEscrowHold::where('purchase_id', $purchase->id)->lockForUpdate()->firstOrFail();
+            if ($hold->status !== 'active') {
+                throw new RequestException('Purchase escrow was already settled.');
+            }
+
+            $fee = gmp_strval(gmp_div_q(gmp_add(gmp_mul($hold->amount_atomic, (int) config('marketplace.market_fee_percent', 3)), 99), 100));
+            $recipientAmount = gmp_strval(gmp_sub($hold->amount_atomic, $fee));
+            $recipientWallet = $this->walletFor($recipient->id, $hold->coin);
+            $marketWallet = $this->systemWalletFor($hold->coin);
+
+            $this->book($hold->buyerWallet, $type, '0', '-' . $hold->amount_atomic, 'purchase', $purchase->id, 'purchase-settle-buyer-' . $purchase->id, null, null, true);
+            $this->book($recipientWallet, $type, $recipientAmount, '0', 'purchase', $purchase->id, 'purchase-settle-recipient-' . $purchase->id, null, null, true);
+            if (gmp_cmp($fee, '0') > 0) {
+                $this->book($marketWallet, $type, $fee, '0', 'purchase', $purchase->id, 'purchase-settle-fee-' . $purchase->id, null, null, true);
+            }
+
+            $hold->status = 'released';
+            $hold->released_to = $recipient->id;
+            $hold->settled_at = now();
+            $hold->save();
+        });
+    }
+
+    public function refundPurchase(Purchase $purchase)
+    {
+        DB::transaction(function () use ($purchase) {
+            $hold = WalletEscrowHold::where('purchase_id', $purchase->id)->lockForUpdate()->firstOrFail();
+            if ($hold->status !== 'active') {
+                throw new RequestException('Purchase escrow was already settled.');
+            }
+            $this->book($hold->buyerWallet, 'escrow_release', $hold->amount_atomic, '-' . $hold->amount_atomic, 'purchase', $purchase->id, 'purchase-refund-' . $purchase->id, null, null, true);
+            $hold->status = 'refunded';
+            $hold->released_to = $purchase->buyer_id;
+            $hold->settled_at = now();
+            $hold->save();
+        });
+    }
+
+    public function coinToAtomic($amount, string $coin): string
+    {
+        $decimals = (int) config('coins.atomic_decimals.' . $coin);
+        $normalized = is_string($amount) && preg_match('/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/', $amount)
+            ? $amount
+            : number_format((float) $amount, $decimals, '.', '');
+        $parts = explode('.', $normalized, 2);
+        $fraction = str_pad(substr($parts[1] ?? '', 0, $decimals), $decimals, '0');
+        $atomic = ltrim($parts[0] . $fraction, '0');
+        return $atomic === '' ? '0' : $atomic;
+    }
+
+    private function systemWalletFor(string $coin): Wallet
+    {
+        return Wallet::firstOrCreate(['user_id' => null, 'coin' => $coin], ['status' => 'active']);
     }
 
     public function book(Wallet $wallet, string $type, string $availableDelta, string $reservedDelta, string $referenceType, $referenceId, string $idempotencyKey, $createdBy = null, $reason = null, bool $allowFrozen = false): WalletLedgerEntry

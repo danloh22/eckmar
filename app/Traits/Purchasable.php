@@ -344,7 +344,7 @@ trait Purchasable {
             // Set the winner
             $this -> dispute -> winner_id = $winner -> id;
             // run resolved procedure
-            $this -> getPayment() -> resolved(['receiving_address' => $winner -> coinAddress($this -> getPayment() -> coinLabel()) -> address]);
+            $this -> getPayment() -> resolved(['winner_id' => $winner->id]);
 
             $this -> dispute -> save();
 

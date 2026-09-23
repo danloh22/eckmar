@@ -21,8 +21,8 @@
                 <div class="card h-100">
                     <div class="card-body">
                         <h5>{{ strtoupper($coin) }}</h5>
-                        <p class="mb-1">Available: <strong>{{ $data['wallet']->available_atomic }}</strong> atomic units</p>
-                        <p>Reserved: <strong>{{ $data['wallet']->reserved_atomic }}</strong> atomic units</p>
+                        <p class="mb-1">Available: <strong>{{ $data['wallet']->available_display }} {{ strtoupper($coin) }}</strong></p>
+                        <p>Reserved: <strong>{{ $data['wallet']->reserved_display }} {{ strtoupper($coin) }}</strong></p>
                         @if($data['address'])
                             <label>Deposit address</label>
                             <textarea class="form-control" rows="4" readonly>{{ $data['address']->address }}</textarea>
@@ -53,7 +53,7 @@
                         <form method="POST" action="{{ route('profile.wallet.withdrawals.create', $coin) }}">
                             {{ csrf_field() }}
                             <label>Withdraw {{ strtoupper($coin) }}</label>
-                            <input class="form-control mb-2" name="amount_atomic" inputmode="numeric" placeholder="Amount in atomic units" required>
+                            <input class="form-control mb-2" name="amount" type="number" min="0" step="{{ $coin === 'xmr' ? '0.000000000001' : '0.00000001' }}" placeholder="Amount in {{ strtoupper($coin) }}" required>
                             <input class="form-control mb-2" name="destination_address" placeholder="Destination address" required>
                             <input class="form-control mb-2" name="pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit withdrawal PIN" required>
                             <button class="btn btn-outline-secondary btn-block" type="submit">Request withdrawal</button>
