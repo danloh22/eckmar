@@ -7,6 +7,10 @@
         <i class="fa fa-key mr-2"></i>
         PGP Key
     </a>
+    <a href="{{ route('profile.wallet') }}" class="nav-link @isroute('profile.wallet') active @endisroute" data-toggle="pill">
+        <i class="fas fa-wallet mr-2"></i>
+        Wallet
+    </a>
     @if(auth() -> user() -> isVendor())
 
         <a href="{{ route('profile.vendor') }}" class="nav-link @isroute('profile.vendor') active @endisroute" data-toggle="pill">
@@ -41,7 +45,7 @@
         <i class="mr-2 far fa-comments"></i>
         Messages
     </a>
-    <a href="{{ route('profile.notifications') }}" class="nav-link @isroute('profile.notification') active @endisroute" data-toggle="pill">
+    <a href="{{ route('profile.notifications') }}" class="nav-link @isroute('profile.notifications') active @endisroute" data-toggle="pill">
     <i class="mr-2 far fa-bell"></i>
     Notifications
     </a>

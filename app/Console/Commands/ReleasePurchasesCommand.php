@@ -42,9 +42,19 @@ class ReleasePurchasesCommand extends Command
     {
         // load default from config if there is no option
         $daysOldPurchases = $this->argument('days')!=null ? intval($this->argument('days')) : config('marketplace.days_old_purchases');
+        $physicalCutoff = Carbon::now()->subDays($daysOldPurchases);
+        $digitalCutoff = Carbon::now()->subHours(config('marketplace.digital_purchase_release_hours', 48));
 
         $releasingPurchases = Purchase::where('state', 'sent')
-                                    -> where('updated_at', '<', Carbon::now()->subDays($daysOldPurchases))->get();
+            ->where(function ($query) use ($physicalCutoff, $digitalCutoff) {
+                $query->where(function ($physical) use ($physicalCutoff) {
+                    $physical->whereDoesntHave('offer.product.digital')
+                        ->where('updated_at', '<=', $physicalCutoff);
+                })->orWhere(function ($digital) use ($digitalCutoff) {
+                    $digital->whereHas('offer.product.digital')
+                        ->where('updated_at', '<=', $digitalCutoff);
+                });
+            })->get();
 
 
         if(count($releasingPurchases) > 0){
@@ -59,7 +69,7 @@ class ReleasePurchasesCommand extends Command
             }
         }
         else {
-            $this -> warn("There are no purchases in 'sent' state older than $daysOldPurchases days!");
+            $this -> warn("There are no sent purchases ready for automatic release.");
         }
     }
 }

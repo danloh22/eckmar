@@ -14,7 +14,7 @@
             <div class="mt-3">
                 <p>Please choose how to recover it</p>
 
-                <form method="GET" action="/forgotpassword/pgp">
+                <form method="GET" action="{{ route('auth.forgotpassword.pgp') }}">
                     <div class="form-group text-center">
                         <div class="row">
                             <button type="submit" class="btn btn-outline-primary btn-block">PGP</button>
@@ -22,7 +22,7 @@
                     </div>
                 </form>
 
-                <form method="GET" action="/forgotpassowrd/mnemonic">
+                <form method="GET" action="{{ route('auth.forgotpassword.mnemonic') }}">
                     <div class="form-group text-center">
                         <div class="row">
                             <button type="submit" class="btn btn-outline-primary btn-block">Mnemonic</button>

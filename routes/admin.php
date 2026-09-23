@@ -3,6 +3,18 @@
 
 Route::get('index', 'Admin\AdminController@index') -> name('admin.index');
 
+Route::get('wallet/withdrawals', 'Admin\WalletController@withdrawals')->name('admin.wallet.withdrawals');
+Route::get('wallets', 'Admin\WalletController@wallets')->name('admin.wallets');
+Route::post('wallets/{wallet}/status/{status}', 'Admin\WalletController@setWalletStatus')->name('admin.wallets.status');
+Route::post('wallets/{wallet}/adjust', 'Admin\WalletController@adjustWallet')->name('admin.wallets.adjust');
+Route::post('wallet/withdrawals/{withdrawal}/approve', 'Admin\WalletController@approve')->name('admin.wallet.withdrawals.approve');
+Route::post('wallet/withdrawals/{withdrawal}/reject', 'Admin\WalletController@reject')->name('admin.wallet.withdrawals.reject');
+Route::post('wallet/withdrawals/{withdrawal}/resolve-failed', 'Admin\WalletController@resolveFailedWithdrawal')->name('admin.wallet.withdrawals.resolve-failed');
+Route::get('wallet/exchanges', 'Admin\WalletController@exchanges')->name('admin.wallet.exchanges');
+Route::post('wallet/fee-addresses/{coin}', 'Admin\WalletController@updateFeeWallet')->name('admin.wallet.fee-addresses.update');
+Route::post('wallet/liquidity/{coin}', 'Admin\WalletController@adjustMarketLiquidity')->name('admin.wallet.liquidity.adjust');
+Route::post('wallet/fee-sweeps/{sweep}/resolve-failed', 'Admin\WalletController@resolveFailedFeeSweep')->name('admin.wallet.fee-sweeps.resolve-failed');
+
 // Categories routes
 Route::get('categories', 'Admin\AdminController@categories') -> name('admin.categories');
 Route::post('category/new', 'Admin\AdminController@newCategory') -> name('admin.categories.new');
@@ -23,6 +35,7 @@ Route::post('users/edit/group/{user}','Admin\UserController@editUserGroup')->nam
 Route::post('users/edit/info/{user}','Admin\UserController@editBasicInfo')->name('admin.user.edit.info');
 
 Route::post('users/ban/{user}', 'Admin\UserController@banUser')->name('admin.user.ban');
+Route::post('users/{user}/withdrawal-pin/reset', 'Admin\UserController@resetWithdrawalPin')->name('admin.user.withdrawal-pin.reset');
 Route::get('users/remove/ban/{ban}', 'Admin\UserController@removeBan')->name('admin.ban.remove');
 
 

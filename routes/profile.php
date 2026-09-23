@@ -7,6 +7,12 @@
 Route::prefix('profile')->group(function(){
 
     Route::get('index','ProfileController@index')->name('profile.index');
+    Route::get('wallet', 'WalletController@index')->name('profile.wallet');
+    Route::post('wallet/{coin}/address', 'WalletController@createDepositAddress')->name('profile.wallet.address.create');
+    Route::post('wallet/{coin}/withdrawals', 'WalletController@requestWithdrawal')->middleware('throttle:5,1')->name('profile.wallet.withdrawals.create');
+    Route::post('wallet/pin', 'WalletController@setWithdrawalPin')->middleware('throttle:5,1')->name('profile.wallet.pin');
+    Route::post('wallet/pin/support', 'WalletController@requestWithdrawalPinReset')->middleware('throttle:2,10')->name('profile.wallet.pin.support');
+    Route::post('wallet/exchange', 'WalletController@exchange')->middleware('throttle:10,1')->name('profile.wallet.exchange');
     Route::post('changepassword', 'ProfileController@changePassword')-> name('profile.password.change'); // change password route
     Route::get('2fa/{turn}', 'ProfileController@change2fa') -> name('profile.2fa.change'); // change 2fa
 
@@ -70,26 +76,26 @@ Route::prefix('profile')->group(function(){
     Route::get('sales/{state?}', 'VendorController@sales') -> name('profile.sales');
     Route::get('sale/{sale}', 'VendorController@sale') -> name('profile.sales.single');
     Route::get('sales/{sale}/sent/confirm', 'VendorController@confirmSent') -> name('profile.sales.sent.confirm');
-    Route::get('sale/{sale}/sent', 'VendorController@markAsSent') -> name('profile.sales.sent');
+    Route::post('sale/{sale}/sent', 'VendorController@markAsSent') -> name('profile.sales.sent');
 
     // Cart routes
     Route::get('cart', 'ProfileController@cart') -> name('profile.cart');
     Route::post('cart/{product}/add', 'ProfileController@addToCart') -> name('profile.cart.add');
-    Route::get('cart/clear', 'ProfileController@clearCart') -> name('profile.cart.clear');
-    Route::get('cart/remove/{product}', 'ProfileController@removeProduct') -> name('profile.cart.remove');
+    Route::post('cart/clear', 'ProfileController@clearCart') -> name('profile.cart.clear');
+    Route::post('cart/remove/{product}', 'ProfileController@removeProduct') -> name('profile.cart.remove');
     Route::get('checkout', 'ProfileController@checkout') -> name('profile.cart.checkout');
-    Route::get('make/purchase', 'ProfileController@makePurchases') -> name('profile.cart.make.purchases');
+    Route::post('make/purchase', 'ProfileController@makePurchases') -> name('profile.cart.make.purchases');
 
     // Purchases routes
     Route::get('purchases/{state?}', 'ProfileController@purchases') -> name('profile.purchases');
     Route::get('purchases/{purchase}/message', 'ProfileController@purchaseMessage') -> name('profile.purchases.message');
     Route::get('purchase/{purchase}', 'ProfileController@purchase') -> name('profile.purchases.single');
     Route::get('purchase/{purchase}/delivered/confirm', 'ProfileController@deliveredConfirm') -> name('profile.purchases.delivered.confirm');
-    Route::get('purchase/{purchase}/delivered', 'ProfileController@markAsDelivered') -> name('profile.purchases.delivered');
+    Route::post('purchase/{purchase}/delivered', 'ProfileController@markAsDelivered') -> name('profile.purchases.delivered');
 
     // canceled for both Vendor and Buyer
     Route::get('purchase/{purchase}/canceled/confirm', 'ProfileController@confirmCanceled') -> name('profile.purchases.canceled.confirm');
-    Route::get('purchase/{purchase}/canceled', 'ProfileController@markAsCanceled') -> name('profile.purchases.canceled');
+    Route::post('purchase/{purchase}/canceled', 'ProfileController@markAsCanceled') -> name('profile.purchases.canceled');
 
     // Purchase - Disputes
     Route::post('purchase/{purchase}/dispute', 'ProfileController@makeDispute') -> name('profile.purchases.dispute');
