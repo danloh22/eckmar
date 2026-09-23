@@ -11,8 +11,7 @@
         <textarea name="product_content" id="product_content"
             class="form-control @error('content', $errors) is-invalid @enderror" rows="5"
             placeholder="Details about the product">{{ $digitalProduct -> content }}</textarea>
-        <p class="text-muted">Leave blank, if digital content doesn't have automatic delivery. Otherwise each
-            product should be put in separated lines.</p>
+        <p class="text-muted">Enter one download URL, license key, or delivery instruction per line. Leave this blank for manual delivery. Undisputed digital orders are completed automatically 48 hours after delivery.</p>
         @error('product_content', $errors)
         <div class="invalid-feedback d-block text-center">
             {{ $errors -> first('product_content') }}
@@ -35,7 +34,7 @@
         <label class="form-check-label" for="unlimited">
             Unlimited Product
         </label>
-        <p class="text-muted">If checked, your product will be unlimited and you can sell it as many times as you want. Please use only one line.</p>
+        <p class="text-muted">If checked, the first line is delivered for every sale and is never removed from stock.</p>
     </div>
 
     <div class="form-row justify-content-center">

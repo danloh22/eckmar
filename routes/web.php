@@ -28,6 +28,7 @@ Route::middleware(['auth'])->group(function () {
     });
 });
 Route::get('/', 'IndexController@home')->name('home');
+Route::get('/rates', 'IndexController@rates')->middleware('throttle:30,1')->name('market.rates');
 Route::get('/category/{category}', 'IndexController@category') -> name('category.show');
 
 Route::get('/login', 'IndexController@login')->name('login');

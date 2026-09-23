@@ -83,6 +83,12 @@ return [
         'ltc' => 8,
     ],
 
+    'rates' => [
+        'url' => env('COIN_RATES_URL', 'https://min-api.cryptocompare.com/data/pricemulti'),
+        'api_key' => env('CRYPTOCOMPARE_API_KEY'),
+        'cache_minutes' => intval(env('COIN_RATES_CACHE_MINUTES', 1)),
+    ],
+
     /**
      * DASH settings
      */

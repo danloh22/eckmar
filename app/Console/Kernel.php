@@ -31,9 +31,9 @@ class Kernel extends ConsoleKernel
         $schedule -> command(DeleteOldMessages::class, ['days' => config('marketplace.days_old_messages')])
                     ->days(config('marketplace.days_old_messages'));
 
-        // Make the command for releasing purchases runs each X days
-        $schedule -> command(ReleasePurchasesCommand::class, ['days' => config('marketplace.days_old_purchases')])
-                    ->days(config('marketplace.days_old_purchases'));
+        // Check hourly: digital sales release after 48 hours, physical sales after the configured day limit.
+        $schedule->command(ReleasePurchasesCommand::class, ['days' => config('marketplace.days_old_purchases')])
+            ->hourly()->withoutOverlapping();
 
         // Run completing command for purchases every defined number of days
         $schedule -> command(CompletePurchaseCommand::class) -> days(config('marketplace.days_complete'));

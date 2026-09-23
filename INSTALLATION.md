@@ -429,6 +429,24 @@ sudo service nginx restart
 
 Your basic marketplace is working now, `Congratulations !`
 
+# Scheduler and live rates
+
+Wallet deposit scans, approved withdrawal broadcasts, fee sweeps, and automatic purchase releases require Laravel's scheduler. Add the following entry with `crontab -e` for the web-server user (adjust the project path if necessary):
+
+```
+* * * * * cd /var/www/eckmar && php artisan schedule:run >> /dev/null 2>&1
+```
+
+The footer obtains BTC, XMR, and LTC rates from CryptoCompare once per minute. For production, add an API key to `.env`:
+
+```
+CRYPTOCOMPARE_API_KEY=your_api_key
+COIN_RATES_CACHE_MINUTES=1
+DIGITAL_PURCHASE_RELEASE_HOURS=48
+```
+
+Optional footer resource links can be configured through the `FOOTER_*_URL` variables documented in `.env.example`. Empty links are not rendered.
+
 # Connecting coins
 
 Nomiac has support for various coins. Each coin has its on prefix in .env file as well as connection parameters. Connection paramters are:

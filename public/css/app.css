@@ -16782,3 +16782,51 @@ table.product td {
   padding: 0.4rem !important;
 }
 
+.market-footer {
+  background: #15161b;
+  border-top: 1px solid #2c3038;
+  color: #d9e2ef;
+}
+
+.market-footer-brand {
+  color: #fff;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: .18rem;
+}
+
+.market-footer-title {
+  color: #9ec5e8;
+  font-size: .9rem;
+  letter-spacing: .08rem;
+  text-transform: uppercase;
+}
+
+.market-footer-link, .market-footer-bottom a {
+  color: #b7cbe0;
+  margin-bottom: .55rem;
+}
+
+.market-footer-link:hover, .market-footer-bottom a:hover {
+  color: #fff;
+  text-decoration: none;
+}
+
+.market-rate-card {
+  background: #1d1f25;
+  border: 1px solid #30343d;
+  border-radius: .65rem;
+  height: 100%;
+  padding: 1rem;
+}
+
+.market-rate-values div {
+  display: flex;
+  font-size: .82rem;
+  justify-content: space-between;
+  margin-top: .55rem;
+}
+
+.market-rate-values strong { color: #c9d9e9; }
+.market-footer-bottom { border-top: 1px solid #2c3038; }
+.market-footer-bottom nav a { margin: 0 0 0 1.25rem; }

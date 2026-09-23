@@ -74,6 +74,18 @@ return [
      */
     'days_old_purchases' => intval(env("PURCHASES_DAYS_OLD", 14)),
 
+    /** Hours after delivery before an undisputed digital purchase is released. */
+    'digital_purchase_release_hours' => intval(env('DIGITAL_PURCHASE_RELEASE_HOURS', 48)),
+
+    'footer_resources' => array_filter([
+        'Dread' => env('FOOTER_DREAD_URL'),
+        'Tor.watch' => env('FOOTER_TOR_WATCH_URL'),
+        'Tor.link' => env('FOOTER_TOR_LINK_URL'),
+        'DNDB' => env('FOOTER_DNDB_URL'),
+        'Darkipedia' => env('FOOTER_DARKIPEDIA_URL'),
+        'Dark.contact' => env('FOOTER_DARK_CONTACT_URL'),
+    ]),
+
     /**
      * Coins for seeder
      */

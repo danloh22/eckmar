@@ -13,6 +13,7 @@ class RouteIntegrityTest extends TestCase
         $this->assertSame(url('/forgotpassword'), route('auth.forgotpassword'));
         $this->assertSame(url('/forgotpassword/mnemonic'), route('auth.forgotpassword.mnemonic'));
         $this->assertSame(url('/forgotpassword/pgp'), route('auth.forgotpassword.pgp'));
+        $this->assertSame(url('/rates'), route('market.rates'));
     }
 
     public function testPurchaseCreationIsPostOnly()
