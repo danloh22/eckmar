@@ -60,8 +60,28 @@ body.market-body {
 .market-body .card-img-top { border-bottom: 1px solid $market-border; height: 190px; object-fit: cover; }
 .market-body .card-title { font-size: 1rem; }
 
+.market-search-shell { background: #17181e; border-bottom: 1px solid $market-border; padding: .8rem 0; }
+.market-search-form { align-items: center; display: flex; margin: auto; max-width: 760px; position: relative; }
+.market-search-form > i { color: $market-muted; left: .9rem; position: absolute; z-index: 2; }
+.market-search-form input { border-radius: .45rem 0 0 .45rem; padding-left: 2.5rem; }
+.market-search-form button { border-radius: 0 .45rem .45rem 0; }
+.market-hero { overflow: hidden; padding: 2.5rem; position: relative; }
+.market-hero:after { background: radial-gradient(circle, rgba(40,182,230,.18), transparent 65%); content: ''; height: 360px; pointer-events: none; position: absolute; right: -100px; top: -160px; width: 360px; }
+.market-hero h1 { font-size: 2.35rem; max-width: 760px; }
+.market-trust-list > div { align-items: center; background: $market-panel-soft; border: 1px solid $market-border; border-radius: .45rem; display: flex; margin-bottom: .65rem; padding: .8rem; }
+.market-trust-list i { color: #41d985; font-size: 1.2rem; margin-right: .8rem; }
+.market-trust-list span, .market-trust-list small { display: block; }
+.market-trust-list small { color: $market-muted; }
+.market-category-panel { padding: .8rem; }
+.market-category-panel h4 { font-size: .85rem; letter-spacing: .08rem; text-transform: uppercase; }
+.market-stat-row { align-items: center; border-top: 1px solid $market-border; display: flex; font-size: .85rem; justify-content: space-between; padding: .65rem 0; }
+.market-product-card { transition: border-color .2s ease, transform .2s ease; }
+.market-product-card:hover { border-color: #4d7890; transform: translateY(-2px); }
+
 @media (min-width: 992px) { .sticky-lg-top { position: sticky; } }
 @media (max-width: 767.98px) {
+  .market-hero { padding: 1.4rem; }
+  .market-hero h1 { font-size: 1.8rem; }
   .cart-item-image { height: 170px; }
   .market-footer-bottom nav { margin-top: 1rem; width: 100%; }
   .market-footer-bottom nav a { margin: 0 1rem 0 0; }
