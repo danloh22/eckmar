@@ -1,140 +1,53 @@
 @extends('master.main')
 
-@section('title','Home Page')
+@section('title', 'Marketplace')
 
 @section('content')
-
-    {{--@include('includes.search')--}}
-
-    <div class="row">
-        <div class="col-md-3 col-sm-12" style="margin-top:2.3em">
-            @include('includes.categories')
+    <section class="market-hero market-panel mb-4">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <span class="market-eyebrow">Wallet-funded · Escrow protected</span>
+                <h1 class="mt-2">A private marketplace built around safer transactions.</h1>
+                <p class="lead text-muted mb-4">Fund your BTC, XMR or LTC wallet, choose a verified offer and keep every purchase protected until delivery or dispute resolution.</p>
+                <div class="d-flex flex-wrap">
+                    <a href="#market-products" class="btn btn-info btn-lg mr-2 mb-2"><i class="fas fa-store mr-2"></i>Explore offers</a>
+                    @auth<a href="{{ route('profile.wallet') }}" class="btn btn-outline-secondary btn-lg mb-2"><i class="fas fa-wallet mr-2"></i>Open wallet</a>@else<a href="{{ route('auth.signup') }}" class="btn btn-outline-secondary btn-lg mb-2">Create account</a>@endauth
+                </div>
+            </div>
+            <div class="col-lg-4 mt-4 mt-lg-0">
+                <div class="market-trust-list">
+                    <div><i class="fas fa-check-circle"></i><span><strong>10 confirmations</strong><small>before deposits become spendable</small></span></div>
+                    <div><i class="fas fa-shield-alt"></i><span><strong>Internal escrow</strong><small>with auditable balance reservations</small></span></div>
+                    <div><i class="fas fa-coins"></i><span><strong>Three currencies</strong><small>BTC, XMR and LTC wallets</small></span></div>
+                </div>
+            </div>
         </div>
-        <div class="col-md-9 col-sm-12 mt-3 ">
+    </section>
 
+    @isModuleEnabled('FeaturedProducts')
+        @include('featuredproducts::frontpagedisplay')
+    @endisModuleEnabled
+
+    <div class="row" id="market-products">
+        <aside class="col-lg-3 mb-4">
+            <div class="market-panel market-category-panel">@include('includes.categories')</div>
+        </aside>
+        <div class="col-lg-9">
+            <div class="d-flex justify-content-between align-items-end mb-3"><div><span class="market-eyebrow">Marketplace</span><h3 class="mb-0">Latest active offers</h3></div><span class="text-muted small">{{ $products->total() }} listings</span></div>
             <div class="row">
-                <div class="col">
-                    <h1 class="col-10">Welcome to {{config('app.name')}}</h1>
-                    <hr>
-                </div>
+                @forelse($products as $product)
+                    <div class="col-md-6 col-xl-4 mb-3">@include('includes.product.card', ['product' => $product])</div>
+                @empty
+                    <div class="col-12"><div class="market-panel market-empty-state text-center py-5"><i class="fas fa-box-open fa-3x mb-3"></i><h4>No active offers</h4><p class="text-muted">New marketplace listings will appear here.</p></div></div>
+                @endforelse
             </div>
-
-            <div class="row">
-                <div class="col">
-                    Lorem ipsum dolor sit amet, consectetur adipisicing elit. Aliquam, aliquid cupiditate dolore enim et
-                    eveniet fugiat illum ipsum itaque minus molestias nihil optio porro quisquam quo saepe sunt velit
-                    veritatis.
-                </div>
-            </div>
-            <div class="row mt-5">
-
-                <div class="col-md-4">
-                    <h4><i class="fa fa-money-bill-wave-alt text-info"></i> No deposit</h4>
-                    <p>
-                        Lorem ipsum dolor sit amet, consectetur adipisicing elit. Accusantium aliquid dolorem hic nisi
-                        ratione repellendus suscipit totam vitae!
-                    </p>
-                </div>
-
-                <div class="col-md-4">
-                    <h4><i class="fa fa-shield-alt text-info"></i> Escrow</h4>
-                    <p>
-                        Lorem ipsum dolor sit amet, consectetur adipisicing elit. Accusantium aliquid dolorem hic nisi
-                        ratione repellendus suscipit totam vitae!
-                    </p>
-                </div>
-
-                <div class="col-md-4">
-                    <h4><i class="fa fa-coins text-info"></i> Multiple-Coins</h4>
-                    <p>
-                        Lorem ipsum dolor sit amet, consectetur adipisicing elit. Accusantium aliquid dolorem hic nisi
-                        ratione repellendus suscipit totam vitae!
-                    </p>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col">
-                    <hr>
-                </div>
-            </div>
-            @isModuleEnabled('FeaturedProducts')
-                @include('featuredproducts::frontpagedisplay')
-            @endisModuleEnabled
-
-            <div class="row mt-4">
-
-                <div class="col-md-4">
-                    <h4>
-                        Top Vendors
-                    </h4>
-                    <hr>
-                    @foreach(\App\Vendor::topVendors() as $vendor)
-                        <table class="table table-borderless table-hover">
-                            <tr>
-                                <td>
-                                    <a href="{{route('vendor.show',$vendor)}}"
-                                       style="text-decoration: none; color:#212529">{{$vendor->user->username}}</a>
-                                </td>
-                                <td class="text-right">
-                                    <span class="btn btn-sm @if($vendor->vendor->experience >= 0) btn-primary @else btn-danger @endif active"
-                                          style="cursor:default">Level {{$vendor->getLevel()}}</span>
-
-                                </td>
-                            </tr>
-                        </table>
-                    @endforeach
-                </div>
-                <div class="col-md-4">
-                    <h4>
-                        Latest orders
-                    </h4>
-                    <hr>
-                    @foreach(\App\Purchase::latestOrders() as $order)
-                        <table class="table table-borderless table-hover">
-                            <tr>
-                                <td>
-                                    <img class="img-fluid" height="23px" width="23px"
-                                         src="{{ asset('storage/'  . $order->offer->product->frontImage()->image) }}"
-                                         alt="{{ $order->offer->product->name }}">
-                                </td>
-                                <td>
-                                    {{str_limit($order->offer->product->name,50,'...')}}
-                                </td>
-                                <td class="text-right">
-                                    {{$order->getSumLocalCurrency()}} {{$order->getLocalSymbol()}}
-                                </td>
-                            </tr>
-                        </table>
-                    @endforeach
-                </div>
-
-                <div class="col-md-4">
-                    <h4>
-                        Rising vendors
-                    </h4>
-                    <hr>
-                    @foreach(\App\Vendor::risingVendors() as $vendor)
-                        <table class="table table-borderless table-hover">
-                            <tr>
-                                <td>
-                                    <a href="{{route('vendor.show',$vendor)}}"
-                                       style="text-decoration: none; color:#212529">{{$vendor->user->username}}</a>
-                                </td>
-                                <td class="text-right">
-                                    <span class="btn btn-sm @if($vendor->vendor->experience >= 0) btn-primary @else btn-danger @endif active"
-                                          style="cursor:default">Level {{$vendor->getLevel()}}</span>
-                                </td>
-                            </tr>
-                        </table>
-                    @endforeach
-                </div>
-
-
-            </div>
-
-
+            {{ $products->links() }}
         </div>
-
     </div>
 
+    <section class="row mt-4">
+        <div class="col-md-4 mb-3"><div class="market-panel h-100"><span class="market-eyebrow">Reputation</span><h5>Top vendors</h5>@forelse(\App\Vendor::topVendors() as $vendor)<div class="market-stat-row"><a href="{{ route('vendor.show', $vendor) }}">{{ $vendor->user->username }}</a><span>Level {{ $vendor->getLevel() }}</span></div>@empty<p class="text-muted small">No vendor statistics yet.</p>@endforelse</div></div>
+        <div class="col-md-4 mb-3"><div class="market-panel h-100"><span class="market-eyebrow">Activity</span><h5>Latest orders</h5>@forelse(\App\Purchase::latestOrders() as $order)<div class="market-stat-row"><span>{{ str_limit($order->offer->product->name, 28, '…') }}</span><strong>{{ $order->getSumLocalCurrency() }} {{ $order->getLocalSymbol() }}</strong></div>@empty<p class="text-muted small">No completed activity yet.</p>@endforelse</div></div>
+        <div class="col-md-4 mb-3"><div class="market-panel h-100"><span class="market-eyebrow">Discover</span><h5>Rising vendors</h5>@forelse(\App\Vendor::risingVendors() as $vendor)<div class="market-stat-row"><a href="{{ route('vendor.show', $vendor) }}">{{ $vendor->user->username }}</a><span>Level {{ $vendor->getLevel() }}</span></div>@empty<p class="text-muted small">No rising vendors yet.</p>@endforelse</div></div>
+    </section>
 @stop

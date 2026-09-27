@@ -58,25 +58,16 @@ class DigitalProduct extends User
      */
     public function getProducts(int $quantity) : array
     {
-        if($quantity > $this -> newQuantity())
+        if(!$this->unlimited && $quantity > $this -> newQuantity())
             throw new RequestException('There is not enough products in the stock!');
 
-        $productsToDelivery = [];
-
-        // push to products from product contnet
-        while($quantity > 0){
-            // extract the first product
-            $firstProduct = substr($this -> content, 0, strpos($this -> content, "\n"));
-
-            // push product to array
-            array_push($productsToDelivery, $firstProduct);
-
-            // remove first product
-            $this -> content = substr($this -> content, strpos($this -> content, "\n") + 1);
-
-            $quantity--;
+        $products = preg_split('/\r?\n/', trim($this->content));
+        if ($this->unlimited) {
+            return array_fill(0, $quantity, $products[0]);
         }
 
+        $productsToDelivery = array_splice($products, 0, $quantity);
+        $this->content = implode("\n", $products);
 
         $this -> save();
         // update \App\Product quantity

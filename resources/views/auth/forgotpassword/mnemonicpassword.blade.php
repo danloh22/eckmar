@@ -12,7 +12,7 @@
             <div class="mt-3">
                 <p>Please enter your username, mnemonic and your new password</p>
 
-                <form method="POST" action="/forgotpassword/mnemonic">
+                <form method="POST" action="{{ route('auth.forgotpassword.mnemonic.reset') }}">
                     {{ csrf_field() }}
 
                     <div class="form-group ">

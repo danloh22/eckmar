@@ -617,6 +617,8 @@ class VendorController extends Controller
      */
     public function confirmSent(Purchase $sale)
     {
+        abort_unless($sale->isVendor(), 403);
+
         return view('profile.purchases.confirmsent', [
             'backRoute' => redirect() -> back() -> getTargetUrl(),
             'sale' => $sale
@@ -631,6 +633,8 @@ class VendorController extends Controller
      */
     public function markAsSent(Purchase $sale)
     {
+        abort_unless($sale->isVendor(), 403);
+
         try{
             $sale -> sent();
             session() -> flash('success', 'You have successfully marked sale as sent!');

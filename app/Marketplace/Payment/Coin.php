@@ -60,4 +60,10 @@ interface Coin
      */
     function coinLabel() : string;
 
+    /**
+     * Return incoming transfers for an address. Amounts must be expressed in
+     * the smallest atomic unit and each transfer must have a stable output id.
+     */
+    function incomingTransfers(string $address): array;
+
 }

@@ -66,6 +66,9 @@ class MoneroPayment implements Coin
      */
     public function sendToAddress(string $toAddress, float $amount) {
         $tx = $this->monero->transfer(['address' => $toAddress, 'amount' => $amount, 'priority' => 1]);
+        if (empty($tx) || (!isset($tx['tx_hash']) && !isset($tx->tx_hash))) {
+            throw new \Exception('Monero wallet RPC did not return a transaction hash.');
+        }
         return $tx;
     }
 
@@ -130,6 +133,27 @@ class MoneroPayment implements Coin
     function coinLabel(): string
     {
         return 'xmr';
+    }
+
+    public function incomingTransfers(string $address): array
+    {
+        $paymentId = $this->getPaymentId($address);
+        $response = $this->monero->get_payments($paymentId);
+        $heightResponse = $this->monero->get_height();
+        $height = (int) ($heightResponse['height'] ?? 0);
+        $incoming = [];
+
+        foreach ((array) ($response['payments'] ?? []) as $index => $payment) {
+            $blockHeight = (int) ($payment['block_height'] ?? 0);
+            $incoming[] = [
+                'transaction_hash' => $payment['tx_hash'],
+                'transaction_output' => (string) ($payment['subaddr_index']['minor'] ?? $index),
+                'amount_atomic' => (string) $payment['amount'],
+                'confirmations' => $blockHeight > 0 && $height >= $blockHeight ? $height - $blockHeight + 1 : 0,
+                'block_height' => $blockHeight ?: null,
+            ];
+        }
+        return $incoming;
     }
 
 

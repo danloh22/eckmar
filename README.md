@@ -2,7 +2,7 @@
 
 Cryptocurrency-friendly marketplace on Laravel.
 
-![](https://github.com/nomiac-mobile/peralta/blob/master/demo/1.png)
+![](demo/1.png)
 
 # Features
 **Vendor Accounts**
@@ -17,7 +17,9 @@ Autofill system is created for users that sell many items (cd-keys for example).
 
 Users can send private messages to each other.
 
-Mnemonic Password ResetWhen an user registers, he receives an unique mnemonic that can be used to reset the password.
+**Mnemonic Password Reset**
+
+When a user registers, they receive a unique mnemonic that can be used to reset their password.
 
 **Wallet System**
 
@@ -43,7 +45,7 @@ Products can be sold normally or as auction. You can specify end date, minimum b
 
 In the admin panel you can create categories, respond to vendor applications, disputes or create news.
 
-# [Installation](https://github.com/nomiac-mobile/peralta/blob/master/INSTALLATION.md)
+# [Installation](INSTALLATION.md)
 
 # Server requirements
 ```

@@ -7,6 +7,7 @@ use App\Marketplace\Cart;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Services\WalletLedgerService;
 use Illuminate\Validation\Rule;
 
 class MakePurchasesRequest extends FormRequest
@@ -33,8 +34,9 @@ class MakePurchasesRequest extends FormRequest
         ];
     }
 
-    public function persist()
+    public function persist(WalletLedgerService $ledger = null)
     {
+        $ledger = $ledger ?: app(WalletLedgerService::class);
         try{
             DB::beginTransaction();
             // foreach item in cart
@@ -43,6 +45,7 @@ class MakePurchasesRequest extends FormRequest
                 $item -> purchased();
                 // Persist the purchase
                 $item -> save();
+                $ledger->reservePurchase($item);
             }
             DB::commit();
             // Clear cart after commiting

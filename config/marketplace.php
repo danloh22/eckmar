@@ -26,7 +26,9 @@ return [
     /**
      * Market fee percent out of 100, must be from 0 to 95
      */
-    'market_fee_percent' => env('MARKET_FEE_PERCENT', 5),
+    'market_fee_percent' => env('MARKET_FEE_PERCENT', 3),
+
+    'exchange_fee_percent' => env('EXCHANGE_FEE_PERCENT', 0.3),
 
     /**
      * Amount of USD that needs to be paid to the market in order to become vendor
@@ -70,7 +72,19 @@ return [
     /**
      * How many days from marking purchase as sent passed to the point of automaticly marking purchase as delivered and releasing the funds to the vendor
      */
-    'days_old_purchases' => intval(env("PURCHASES_DAYS_OLD", 60)),
+    'days_old_purchases' => intval(env("PURCHASES_DAYS_OLD", 14)),
+
+    /** Hours after delivery before an undisputed digital purchase is released. */
+    'digital_purchase_release_hours' => intval(env('DIGITAL_PURCHASE_RELEASE_HOURS', 48)),
+
+    'footer_resources' => array_filter([
+        'Dread' => env('FOOTER_DREAD_URL'),
+        'Tor.watch' => env('FOOTER_TOR_WATCH_URL'),
+        'Tor.link' => env('FOOTER_TOR_LINK_URL'),
+        'DNDB' => env('FOOTER_DNDB_URL'),
+        'Darkipedia' => env('FOOTER_DARKIPEDIA_URL'),
+        'Dark.contact' => env('FOOTER_DARK_CONTACT_URL'),
+    ]),
 
     /**
      * Coins for seeder

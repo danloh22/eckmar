@@ -222,6 +222,11 @@ class Purchase extends Model
         return $this -> hasOne(\App\Vendor::class, 'id', 'vendor_id');
     }
 
+    public function walletEscrowHold()
+    {
+        return $this->hasOne(WalletEscrowHold::class);
+    }
+
     /**
      * Returns sum of dollars that needs to be paid for this purchase
      *
@@ -276,7 +281,7 @@ class Purchase extends Model
      */
     public function getCoinSumAttribute()
     {
-        return number_format($this -> getSum(), 8);
+        return number_format($this -> getSum(), (int) config('coins.atomic_decimals.' . $this->coin_name, 8));
     }
 
     /**
@@ -485,6 +490,9 @@ class Purchase extends Model
      */
     public function getBalance() : float
     {
+        if (strpos((string) $this->address, 'wallet:') === 0) {
+            return optional($this->walletEscrowHold)->status === 'active' ? (float) $this->to_pay : 0.0;
+        }
         $addressBalance = 0;
         // Catch errors
         try{
@@ -520,7 +528,7 @@ class Purchase extends Model
         $balance = $this -> getBalance();
         if($balance == -1)
             return 'unavailable';
-        return number_format($balance, 8);
+        return number_format($balance, (int) config('coins.atomic_decimals.' . $this->coin_name, 8));
     }
 
     /**

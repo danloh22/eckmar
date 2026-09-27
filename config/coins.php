@@ -16,7 +16,7 @@ return [
         'xmr' => \App\Marketplace\Payment\MoneroPayment::class,
         'stb' => \App\Marketplace\Payment\StubCoin::class,
 //        'pivx' => \App\Marketplace\Payment\PivxCoin::class,
-//        'ltc' => \App\Marketplace\Payment\LitecoinPayment::class,
+        'ltc' => \App\Marketplace\Payment\LitecoinPayment::class,
 //        'dash' => \App\Marketplace\Payment\DashPayment::class,
 //        'bch' => \App\Marketplace\Payment\BitcoinCashPayment::class,
 //        'xvg' => \App\Marketplace\Payment\VergeCoin::class,
@@ -32,7 +32,7 @@ return [
         'username' => env('BITCOIND_USERNAME', 'myuser'),
         'password' => env('BITCOIND_PASSWORD', 'mypassword'),
         'port' => env('BITCOIND_PORT', 18332),
-        'minconfirmations' => env('BITCOIND_MINCONFIRMATIONS', 1),
+        'minconfirmations' => env('BITCOIND_MINCONFIRMATIONS', 10),
     ],
 
 
@@ -69,6 +69,24 @@ return [
         'port' => intval(env('LITECOIN_PORT',19332)),
         'username' => env('LITECOIN_USERNAME','myuser'),
         'password' => env('LITECOIN_PASSWORD','mypassword')
+    ],
+
+    'wallet_confirmations' => [
+        'btc' => intval(env('BTC_WALLET_CONFIRMATIONS', 10)),
+        'xmr' => intval(env('XMR_WALLET_CONFIRMATIONS', 10)),
+        'ltc' => intval(env('LTC_WALLET_CONFIRMATIONS', 10)),
+    ],
+
+    'atomic_decimals' => [
+        'btc' => 8,
+        'xmr' => 12,
+        'ltc' => 8,
+    ],
+
+    'rates' => [
+        'url' => env('COIN_RATES_URL', 'https://min-api.cryptocompare.com/data/pricemulti'),
+        'api_key' => env('CRYPTOCOMPARE_API_KEY'),
+        'cache_minutes' => intval(env('COIN_RATES_CACHE_MINUTES', 1)),
     ],
 
     /**
