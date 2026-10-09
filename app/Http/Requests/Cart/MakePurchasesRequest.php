@@ -42,6 +42,17 @@ class MakePurchasesRequest extends FormRequest
         try{
             $items = Cart::getCart()->items();
             ksort($items);
+            // Keep session models untouched on rollback and later manual retries.
+            // Clone preserves the cart purchase ID; fresh relations prevent shared
+            // cached model instances from being changed by checkout processing.
+            $items = array_map(function ($item) {
+                $purchase = clone $item;
+                $purchase->setRelations([]);
+                return $purchase;
+            }, $items);
+            // Do not automatically retry this closure: rollback does not reset the
+            // captured Eloquent models' exists/attributes or the purchases list.
+            // Reusing them after a deadlock could update an insert that rolled back.
             DB::transaction(function () use ($items, $ledger, &$purchases) {
                 foreach ($items as $item) {
                     $item->purchased();
@@ -49,7 +60,7 @@ class MakePurchasesRequest extends FormRequest
                     $ledger->reservePurchase($item);
                     $purchases[] = $item;
                 }
-            }, 3);
+            });
             // Clear cart after commiting
             Cart::getCart() -> clearCart();
         }

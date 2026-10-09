@@ -77,7 +77,7 @@ class MessageController extends ProfileController
     }
 
     /**
-     * Find old conversation or make new and redirect the the page
+     * Find or create the conversation and send its first message within this POST request
      *
      * @param NewConversationRequest $request
      * @return \Illuminate\Http\RedirectResponse
@@ -89,11 +89,8 @@ class MessageController extends ProfileController
         $newOldConversation = Conversation::findWithUsersOrCreate(auth() -> user(), $otherUser);
 
 
-        // Redirect to new message via GET request
-        return redirect() -> route('profile.messages.send.message', [
-            'conversation' => $newOldConversation,
-            'message' => $request -> message
-        ]) ;
+        // Reuse the authorized send path without placing private text in a URL.
+        return $this->newMessage($request, $newOldConversation);
     }
 
     /**

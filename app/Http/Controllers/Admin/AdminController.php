@@ -257,6 +257,8 @@ class AdminController extends Controller
      */
     public function tickets()
     {
+        $this->ticketsCheck();
+
         return view('admin.tickets', [
            'tickets' => Ticket::orderByDesc('created_at') -> paginate(config('marketplace.posts_per_page'))
         ]);
@@ -271,6 +273,8 @@ class AdminController extends Controller
      */
     public function viewTicket(Ticket $ticket)
     {
+        $this->ticketsCheck();
+
         return view('admin.ticket', [
             'ticket' => $ticket,
             'replies' => $ticket -> replies() -> orderByDesc('created_at') -> paginate(config('marketplace.posts_per_page')),
@@ -285,6 +289,8 @@ class AdminController extends Controller
      */
     public function solveTicket(Ticket $ticket)
     {
+        $this->ticketsCheck();
+
         $ticket -> solved = !$ticket -> solved;
         $ticket -> save();
         session() -> flash('successmessage', 'The ticket has been solved!');
@@ -308,6 +314,8 @@ class AdminController extends Controller
     
     
     public function removeTickets(Request $request){
+        $this->ticketsCheck();
+
         $type = $request->type;
         if ($type == 'all'){
             foreach (Ticket::all() as $ticket){
