@@ -160,6 +160,8 @@ class ProductController extends Controller
     
     public function featuredProductsShow(){
 
+        $this->checkProducts();
+
         $products = Product::where('featured',1)->paginate(25);
 
         return view('admin.featuredproducts')->with([

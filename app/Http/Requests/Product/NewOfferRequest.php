@@ -28,8 +28,8 @@ class NewOfferRequest extends FormRequest
     public function rules()
     {
         return [
-            'min_quantity' => 'required|numeric|min:1',
-            'price' => 'required|numeric'
+            'min_quantity' => 'required|integer|min:1',
+            'price' => 'required|numeric|min:0.01'
         ];
     }
 
