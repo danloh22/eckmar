@@ -21,7 +21,7 @@ class NewOfferValidationTest extends TestCase
 
     public function validOffers()
     {
-        return [[1, 0.01], ['1', '0.01'], ['5', '12.50'], [100, '1000.00']];
+        return [[1, 0.01], ['1', '0.01'], ['5', '12.50'], [100, '1000.00'], [2147483647, '1.00'], ['2147483647', '1.00']];
     }
 
     /** @dataProvider invalidOffers */
@@ -39,6 +39,8 @@ class NewOfferValidationTest extends TestCase
     {
         return [
             ['min_quantity', '1.5'],
+            ['min_quantity', '2147483648'],
+            ['min_quantity', '999999999999999999999'],
             ['min_quantity', '0'],
             ['min_quantity', '-1'],
             ['min_quantity', 'abc'],

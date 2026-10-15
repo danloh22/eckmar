@@ -28,7 +28,8 @@ class NewOfferRequest extends FormRequest
     public function rules()
     {
         return [
-            'min_quantity' => 'required|integer|min:1',
+            // Match the signed INT column in the offers migration.
+            'min_quantity' => 'required|integer|min:1|max:2147483647',
             'price' => 'required|numeric|min:0.01'
         ];
     }
