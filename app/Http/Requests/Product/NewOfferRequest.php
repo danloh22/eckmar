@@ -51,7 +51,7 @@ class NewOfferRequest extends FormRequest
 
             // check if there is same offer
             $minQuantity = $this -> min_quantity;
-            if($offers -> search(function($offer, $key) use($minQuantity){ return $offer -> min_quantity == $minQuantity; }))
+            if($offers -> search(function($offer, $key) use($minQuantity){ return $offer -> min_quantity == $minQuantity; }) !== false)
                 throw new RequestException('There is already offer like that! Please remove old offer to add new one.');
 
             $newOffer = new Offer();

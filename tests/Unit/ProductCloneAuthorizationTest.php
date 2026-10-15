@@ -34,6 +34,7 @@ class ProductCloneAuthorizationTest extends TestCase
         $this->actingAs($this->regularUser('other-user'));
         $product = new Product();
         $product->active = true;
+        $product->user_id = $owner->getKey();
         $product->setRelation('user', $owner);
 
         // Authorization must reject the request before any cloning transaction.
@@ -50,6 +51,7 @@ class ProductCloneAuthorizationTest extends TestCase
         $this->actingAs($owner);
         $product = new Product();
         $product->active = false;
+        $product->user_id = $owner->getKey();
         $product->setRelation('user', $owner);
 
         DB::shouldReceive('beginTransaction')->never();
@@ -64,6 +66,7 @@ class ProductCloneAuthorizationTest extends TestCase
         $this->actingAs($owner);
         $product = new Product();
         $product->active = true;
+        $product->user_id = $owner->getKey();
         $product->setRelation('user', $owner);
 
         $view = (new ProductController())->cloneProductShow($product);

@@ -245,6 +245,13 @@ class AdminController extends Controller
      */
     public function purchase(Purchase $purchase)
     {
+        // Dispute moderators may inspect purchases attached to a dispute only.
+        abort_unless(
+            Gate::allows('has-access', 'purchases')
+            || (Gate::allows('has-access', 'disputes') && $purchase->dispute !== null),
+            403
+        );
+
         return view('admin.purchase', [
             'purchase' => $purchase,
         ]);
@@ -307,6 +314,8 @@ class AdminController extends Controller
      */
     public function vendorPurchases()
     {
+        abort_unless(Gate::allows('has-access', 'vendorpurchase'), 403);
+
         return view('admin.vendorpurchases', [
             'vendors' => Vendor::orderByDesc('created_at')->paginate(24),
         ]);

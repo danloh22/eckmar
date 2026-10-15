@@ -151,6 +151,8 @@ class ProductController extends Controller
      */
     public function purchases()
     {
+        abort_unless(Gate::allows('has-access', 'purchases'), 403);
+
         return view('admin.purchases', [
             'purchases' => Purchase::orderByDesc('created_at')->paginate(config('marketplace.products_per_page')),
         ]);

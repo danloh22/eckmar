@@ -168,7 +168,7 @@ class VendorController extends Controller
                 $offers = session('product_offers') ?? collect();
 
                 $offers = $offers -> reject(function($offer, $keys) use($quantity){
-                    return $offer -> quantity != $quantity;
+                    return $offer -> min_quantity == $quantity;
                 });
 
                 session() -> put('product_offers', $offers);
