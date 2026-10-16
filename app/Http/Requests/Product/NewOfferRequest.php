@@ -28,9 +28,24 @@ class NewOfferRequest extends FormRequest
     public function rules()
     {
         return [
-            'min_quantity' => 'required|numeric|min:1',
-            'price' => 'required|numeric'
+            // Match the signed INT column in the offers migration.
+            'min_quantity' => 'required|integer|min:1|max:2147483647',
+            'price' => 'required|numeric|min:0.01'
         ];
+    }
+
+    /**
+     * Validate the value that will actually be stored after currency rounding.
+     */
+    protected function validatedUsdPrice()
+    {
+        $price = CurrencyConverter::convertToUsd($this->price);
+
+        if (!is_numeric($price) || !is_finite((float) $price) || $price <= 0) {
+            throw new RequestException('The converted offer price must be a finite amount greater than zero USD.');
+        }
+
+        return $price;
     }
 
     public function persist(Product $editingProduct = null)
@@ -39,7 +54,7 @@ class NewOfferRequest extends FormRequest
         if($editingProduct && $editingProduct -> exists()){
             $newOffer = new Offer();
             $newOffer -> min_quantity = $this -> min_quantity;
-            $newOffer -> price = CurrencyConverter::convertToUsd($this -> price);
+            $newOffer -> price = $this->validatedUsdPrice();
             $newOffer -> product_id = $editingProduct -> id;
             $newOffer -> save();
 
@@ -51,13 +66,13 @@ class NewOfferRequest extends FormRequest
 
             // check if there is same offer
             $minQuantity = $this -> min_quantity;
-            if($offers -> search(function($offer, $key) use($minQuantity){ return $offer -> min_quantity == $minQuantity; }))
+            if($offers -> search(function($offer, $key) use($minQuantity){ return $offer -> min_quantity == $minQuantity; }) !== false)
                 throw new RequestException('There is already offer like that! Please remove old offer to add new one.');
 
             $newOffer = new Offer();
             $newOffer -> id = \Uuid::generate() -> string;
             $newOffer -> min_quantity = $this -> min_quantity;
-            $newOffer -> price = CurrencyConverter::convertToUsd($this -> price);
+            $newOffer -> price = $this->validatedUsdPrice();
 
             $offers -> push($newOffer); // put new offer
             $offers = $offers -> sortBy(function($offer){ return $offer -> min_quantity; });
@@ -66,3 +81,4 @@ class NewOfferRequest extends FormRequest
         }
     }
 }
+
