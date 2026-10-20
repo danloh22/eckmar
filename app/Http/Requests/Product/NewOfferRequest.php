@@ -41,8 +41,10 @@ class NewOfferRequest extends FormRequest
     {
         $price = CurrencyConverter::convertToUsd($this->price);
 
-        if (!is_numeric($price) || !is_finite((float) $price) || $price <= 0) {
-            throw new RequestException('The converted offer price must be a finite amount greater than zero USD.');
+        if (!is_numeric($price) || !is_finite((float) $price) || $price <= 0 || $price >= 100000000000000) {
+            throw new RequestException(
+                'The converted offer price must be a finite amount greater than zero and below 100000000000000 USD.'
+            );
         }
 
         return $price;
