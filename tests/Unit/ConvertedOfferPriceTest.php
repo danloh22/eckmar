@@ -30,7 +30,7 @@ class ConvertedOfferPriceTest extends TestCase
                 $this->fail('An invalid converted price must be rejected.');
             } catch (RequestException $error) {
                 $this->assertSame(
-                    'The converted offer price must be a finite amount greater than zero USD.',
+                    'The converted offer price must be a finite amount greater than zero and below 100000000000000 USD.',
                     $error->getMessage()
                 );
             }
@@ -48,7 +48,7 @@ class ConvertedOfferPriceTest extends TestCase
     {
         $cases = [];
         foreach ([false, true] as $editing) {
-            foreach ([0.004, 0.005, 0.0, -1.0, INF, -INF, NAN] as $rawUsd) {
+            foreach ([0.004, 0.005, 0.0, -1.0, 99999999999999.995, 100000000000000, 1000000000000000, INF, -INF, NAN] as $rawUsd) {
                 $cases[] = [$rawUsd, $editing];
             }
         }
@@ -86,6 +86,8 @@ class ConvertedOfferPriceTest extends TestCase
         return [
             [0.006, 0.01, false], [0.006, 0.01, true],
             [1.234, 1.23, false], [1.234, 1.23, true],
+            [99999999999999, 99999999999999.0, false],
+            [99999999999999, 99999999999999.0, true],
         ];
     }
 
