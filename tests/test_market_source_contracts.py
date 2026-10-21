@@ -42,7 +42,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
 
         self.assertIn("if ($product && $product->exists) {", remove_offer_source)
         self.assertIsNone(
-            re.search(r"\\$product\\s*->\\s*exists\\s*\\(", remove_offer_source)
+            re.search(r"\$product\s*->\s*exists\s*\(", remove_offer_source)
         )
 
 if __name__ == "__main__":
