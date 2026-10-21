@@ -102,6 +102,20 @@ class IsolatedRunnerTest(unittest.TestCase):
                 self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
                 path.unlink()
 
+    def test_refuses_symlinked_storage_app_directories_before_php(self):
+        external_runtime = self.root / "external-storage-app"
+        external_runtime.mkdir()
+        for name in ("storage/app", "storage/app/public"):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.symlink_to(external_runtime, target_is_directory=True)
+                result = self.run_script()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{name} is symlinked", result.stderr)
+                self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
+                path.unlink()
+
     def test_refuses_symlinked_source_directories_before_php(self):
         external_source = self.root / "external-source"
         external_source.mkdir()
