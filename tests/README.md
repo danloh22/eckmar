@@ -57,3 +57,8 @@ The runner now also rejects symlinked `routes` and `resources` directories befor
 ## Runner nested storage isolation on 21 October 2026
 
 The runner now rejects symlinked `storage/logs` plus `storage/framework/cache`, `storage/framework/sessions` and `storage/framework/views` directories before invoking PHP. This keeps Laravel logs, cache entries, sessions and compiled views inside the disposable checkout even when their parent storage directories are local. `bash -n scripts/test-isolated.sh` and all thirteen Python runner-contract tests passed, including all four nested directory cases. These remain shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
+
+
+## Runner storage-application isolation on 21 October 2026
+
+The runner now also rejects symlinked `storage/app` and `storage/app/public` directories before invoking PHP. Uploads and other application-managed files must stay inside the disposable checkout even when the parent `storage` directory is local. `bash -n scripts/test-isolated.sh` and all fourteen Python runner-contract tests passed, including both new nested-directory cases. These remain shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
