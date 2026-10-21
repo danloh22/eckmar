@@ -112,6 +112,34 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             persist_source.index(transaction),
         )
 
+    def test_profile_purchase_views_authorize_before_rendering(self):
+        source = (
+            self.root / "app/Http/Controllers/ProfileController.php"
+        ).read_text(encoding="utf-8")
+        contracts = (
+            (
+                "public function purchaseMessage(Purchase $purchase)",
+                "public function purchase(Purchase $purchase)",
+                "return view('profile.purchases.viewmessage'",
+            ),
+            (
+                "public function purchase(Purchase $purchase)",
+                "public function deliveredConfirm(Purchase $purchase)",
+                "return view('profile.purchases.purchase'",
+            ),
+        )
+
+        for start_marker, end_marker, view in contracts:
+            with self.subTest(method=start_marker):
+                start = source.index(start_marker)
+                end = source.index(end_marker, start + len(start_marker))
+                method_source = source[start:end]
+                guard = "abort_unless($purchase->isAllowed(), 403);"
+
+                self.assertIn(guard, method_source)
+                self.assertIn(view, method_source)
+                self.assertLess(method_source.index(guard), method_source.index(view))
+
     def test_featured_removal_request_uses_products_permission_gate(self):
         source = (
             self.root
