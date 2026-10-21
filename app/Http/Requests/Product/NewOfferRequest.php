@@ -54,8 +54,13 @@ class NewOfferRequest extends FormRequest
     {
         // offers for editing product
         if ($editingProduct && $editingProduct->exists) {
+            $minQuantity = $this->min_quantity;
+            if ($editingProduct->offers()->where('min_quantity', $minQuantity)->exists()) {
+                throw new RequestException('There is already offer like that! Please remove old offer to add new one.');
+            }
+
             $newOffer = new Offer();
-            $newOffer -> min_quantity = $this -> min_quantity;
+            $newOffer -> min_quantity = $minQuantity;
             $newOffer -> price = $this->validatedUsdPrice();
             $newOffer -> product_id = $editingProduct -> id;
             $newOffer -> save();
