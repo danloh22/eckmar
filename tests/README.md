@@ -26,3 +26,7 @@ A normal `apt-get update` with short network timeouts failed before any package 
 
 `bash -n scripts/test-isolated.sh` and all six Python runner-contract tests passed. Covered rejection paths include environment files, cached configuration, broken environment symlinks, missing locked dependencies and configuration overrides; child-environment sanitization and failure propagation are also checked. The PHP stand-in only checks shell behavior. PHP, Composer, Docker and Podman remain absent, so PHP syntax checks, runtime extension/version validation and PHPUnit execution have NOT run. No package installation was retried.
 
+
+## Runner symlink hardening on 21 October 2026
+
+The runner now rejects symlinked `composer.lock`, `phpunit.xml`, `vendor/autoload.php` and `vendor/bin/phpunit` before invoking PHP. Locked artifacts must exist directly in the disposable checkout rather than resolving to files outside it. Bash syntax validation and all seven Python runner-contract tests passed, including each symlink rejection. These remain shell-runner tests using a PHP stand-in; PHP syntax checks and PHPUnit were not executed.
