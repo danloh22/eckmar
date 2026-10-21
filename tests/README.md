@@ -43,3 +43,8 @@ The runner now rejects symlinked `bootstrap` and `bootstrap/cache` directories b
 ## Runner storage-path hardening on 21 October 2026
 
 The runner now rejects symlinked `storage` and `storage/framework` directories before invoking PHP. This keeps Laravel runtime writes, compiled views and log paths inside the disposable checkout instead of allowing a parent-path escape. `bash -n scripts/test-isolated.sh` and all ten Python runner-contract tests passed, including both storage directory cases. These are shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
+
+
+## Runner source-directory hardening on 21 October 2026
+
+The runner now rejects symlinked `app`, `config`, `database` and `tests` directories before invoking PHP. This ensures PHPUnit executes the reviewed application, configuration, migrations and tests from the disposable checkout rather than source trees outside it. `bash -n scripts/test-isolated.sh` and all eleven Python runner-contract tests passed, including all four source-directory cases. These are shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
