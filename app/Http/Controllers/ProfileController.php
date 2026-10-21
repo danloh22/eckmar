@@ -379,6 +379,8 @@ class ProfileController extends Controller
      */
     public function purchaseMessage(Purchase $purchase)
     {
+        abort_unless($purchase->isAllowed(), 403);
+
         return view('profile.purchases.viewmessage', [
             'purchase' => $purchase
         ]);
@@ -392,6 +394,8 @@ class ProfileController extends Controller
      */
     public function purchase(Purchase $purchase)
     {
+        abort_unless($purchase->isAllowed(), 403);
+
         return view('profile.purchases.purchase', [
             'purchase' => $purchase
         ]);
