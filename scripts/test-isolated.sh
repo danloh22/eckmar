@@ -11,8 +11,8 @@ for unsafe in .env .env.testing bootstrap/cache/config.php; do
     [[ ! -e "$root/$unsafe" && ! -L "$root/$unsafe" ]] || fail "Refusing test run: $unsafe exists. Use a disposable checkout without environment files or cached configuration."
 done
 
-for unsafe_dir in bootstrap bootstrap/cache; do
-    [[ ! -L "$root/$unsafe_dir" ]] || fail "Refusing test run: $unsafe_dir is symlinked. Use a disposable checkout with local bootstrap paths."
+for unsafe_dir in bootstrap bootstrap/cache storage storage/framework; do
+    [[ ! -L "$root/$unsafe_dir" ]] || fail "Refusing test run: $unsafe_dir is symlinked. Use a disposable checkout with local runtime paths."
 done
 php_bin="$(command -v php)" || fail 'PHP is unavailable; install the locked-compatible PHP 7.x runtime in an authorized isolated environment.'
 for required_dir in vendor vendor/bin; do
