@@ -53,7 +53,7 @@ class NewOfferRequest extends FormRequest
     public function persist(Product $editingProduct = null)
     {
         // offers for editing product
-        if($editingProduct && $editingProduct -> exists()){
+        if ($editingProduct && $editingProduct->exists) {
             $newOffer = new Offer();
             $newOffer -> min_quantity = $this -> min_quantity;
             $newOffer -> price = $this->validatedUsdPrice();
