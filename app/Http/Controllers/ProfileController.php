@@ -591,6 +591,8 @@ class ProfileController extends Controller
     {
         // Tickets
         if(!is_null($ticket)){
+            abort_unless((string) $ticket->user_id === (string) auth()->id(), 403);
+
             $replies = $ticket -> replies() -> orderByDesc('created_at') -> paginate( config('marketplace.products_per_page'));
         }
         else {
@@ -625,6 +627,8 @@ class ProfileController extends Controller
 
     public function newTicketMessage(Ticket $ticket, NewTicketMessageRequest $request)
     {
+        abort_unless((string) $ticket->user_id === (string) auth()->id(), 403);
+
         try{
             TicketReply::postReply($ticket, $request -> message);
         }
