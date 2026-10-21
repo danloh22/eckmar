@@ -30,3 +30,8 @@ A normal `apt-get update` with short network timeouts failed before any package 
 ## Runner symlink hardening on 21 October 2026
 
 The runner now rejects symlinked `composer.lock`, `phpunit.xml`, `vendor/autoload.php` and `vendor/bin/phpunit` before invoking PHP. Locked artifacts must exist directly in the disposable checkout rather than resolving to files outside it. Bash syntax validation and all seven Python runner-contract tests passed, including each symlink rejection. These remain shell-runner tests using a PHP stand-in; PHP syntax checks and PHPUnit were not executed.
+
+
+## Runner parent-directory hardening on 21 October 2026
+
+The runner now rejects symlinked `vendor` and `vendor/bin` directories as well as symlinked required files. This closes the remaining parent-path escape where regular-looking autoload or PHPUnit files could resolve through an external vendor tree. `bash -n scripts/test-isolated.sh` and all eight Python runner-contract tests passed, including both directory cases. These are shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
