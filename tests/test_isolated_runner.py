@@ -87,6 +87,19 @@ class IsolatedRunnerTest(unittest.TestCase):
         self.assertIn("storage/framework is symlinked", result.stderr)
         self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
 
+    def test_refuses_symlinked_source_directories_before_php(self):
+        external_source = self.root / "external-source"
+        external_source.mkdir()
+        for name in ("app", "config", "database", "tests"):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.symlink_to(external_source, target_is_directory=True)
+                result = self.run_script()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{name} is symlinked", result.stderr)
+                self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
+                path.unlink()
+
     def test_refuses_missing_locked_dependencies_before_php(self):
         for name in ("composer.lock", "phpunit.xml", "vendor/autoload.php", "vendor/bin/phpunit"):
             with self.subTest(name=name):
