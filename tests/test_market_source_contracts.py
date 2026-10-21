@@ -45,5 +45,25 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             re.search(r"\$product\s*->\s*exists\s*\(", remove_offer_source)
         )
 
+    def test_persisted_offer_rejects_duplicate_quantity_before_mutation(self):
+        start = self.request_source.index(
+            "if ($editingProduct && $editingProduct->exists) {"
+        )
+        end = self.request_source.index("// offer for new product", start)
+        persisted_branch = self.request_source[start:end]
+
+        duplicate_check = (
+            "$editingProduct->offers()->where('min_quantity', $minQuantity)->exists()"
+        )
+        self.assertIn(duplicate_check, persisted_branch)
+        self.assertLess(
+            persisted_branch.index(duplicate_check),
+            persisted_branch.index("$newOffer = new Offer();"),
+        )
+        self.assertIn(
+            "There is already offer like that! Please remove old offer to add new one.",
+            persisted_branch,
+        )
+
 if __name__ == "__main__":
     unittest.main()
