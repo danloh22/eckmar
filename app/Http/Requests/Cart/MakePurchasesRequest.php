@@ -41,6 +41,9 @@ class MakePurchasesRequest extends FormRequest
         $purchases = [];
         try{
             $items = Cart::getCart()->items();
+            if (empty($items)) {
+                throw new RequestException('Add at least one product before opening checkout.');
+            }
             ksort($items);
             // Keep session models untouched on rollback and later manual retries.
             // Clone preserves the cart purchase ID; fresh relations prevent shared
