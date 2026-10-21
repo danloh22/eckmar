@@ -35,3 +35,7 @@ The runner now rejects symlinked `composer.lock`, `phpunit.xml`, `vendor/autoloa
 ## Runner parent-directory hardening on 21 October 2026
 
 The runner now rejects symlinked `vendor` and `vendor/bin` directories as well as symlinked required files. This closes the remaining parent-path escape where regular-looking autoload or PHPUnit files could resolve through an external vendor tree. `bash -n scripts/test-isolated.sh` and all eight Python runner-contract tests passed, including both directory cases. These are shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
+
+## Runner bootstrap-path hardening on 21 October 2026
+
+The runner now rejects symlinked `bootstrap` and `bootstrap/cache` directories before invoking PHP. This keeps Laravel cache reads and writes inside the disposable checkout even when no cached `config.php` exists yet. `bash -n scripts/test-isolated.sh` and all nine Python runner-contract tests passed, including both bootstrap parent-directory cases. These are shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
