@@ -62,3 +62,10 @@ The runner now rejects symlinked `storage/logs` plus `storage/framework/cache`, 
 ## Runner storage-application isolation on 21 October 2026
 
 The runner now also rejects symlinked `storage/app` and `storage/app/public` directories before invoking PHP. Uploads and other application-managed files must stay inside the disposable checkout even when the parent `storage` directory is local. `bash -n scripts/test-isolated.sh` and all fourteen Python runner-contract tests passed, including both new nested-directory cases. These remain shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
+
+
+## Offer persistence source contract — 21 October 2026
+
+The persisted-offer branch now checks Eloquent's public `exists` state instead of calling it as a method. The converted-price PHPUnit fixture marks its partial product model with `$product->exists = true`, so the test reaches the database persistence path that production uses.
+
+`python3 tests/test_market_source_contracts.py` passed both source-contract tests. These checks prevent the property/method mismatch from returning, but they do not execute PHP, PHPUnit, Laravel or MySQL. The locked PHP 7.x application suite and disposable MySQL concurrency tests remain required.
