@@ -65,5 +65,22 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             persisted_branch,
         )
 
+
+    def test_featured_removal_request_uses_products_permission_gate(self):
+        source = (
+            self.root
+            / "app/Http/Requests/Admin/RemoveProductFromFeaturedReuqest.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("public function authorize()")
+        end = source.index("public function rules()", start)
+        authorize_source = source[start:end]
+
+        self.assertIn("use Illuminate\\Support\\Facades\\Gate;", source)
+        self.assertIn(
+            "return Gate::allows('has-access', 'products');",
+            authorize_source,
+        )
+        self.assertNotIn("isAdmin()", authorize_source)
+
 if __name__ == "__main__":
     unittest.main()
