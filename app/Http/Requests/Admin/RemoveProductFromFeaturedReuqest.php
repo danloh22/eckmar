@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Product;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 
 class RemoveProductFromFeaturedReuqest extends FormRequest
 {
@@ -14,7 +15,7 @@ class RemoveProductFromFeaturedReuqest extends FormRequest
      */
     public function authorize()
     {
-        return auth()->user() && auth()->user()->isAdmin();
+        return Gate::allows('has-access', 'products');
     }
 
     /**
