@@ -11,7 +11,7 @@ for unsafe in .env .env.testing bootstrap/cache/config.php; do
     [[ ! -e "$root/$unsafe" && ! -L "$root/$unsafe" ]] || fail "Refusing test run: $unsafe exists. Use a disposable checkout without environment files or cached configuration."
 done
 
-for unsafe_dir in app config database tests bootstrap bootstrap/cache storage storage/framework; do
+for unsafe_dir in app config database tests routes resources bootstrap bootstrap/cache storage storage/framework; do
     [[ ! -L "$root/$unsafe_dir" ]] || fail "Refusing test run: $unsafe_dir is symlinked. Use a disposable checkout with local repository paths."
 done
 php_bin="$(command -v php)" || fail 'PHP is unavailable; install the locked-compatible PHP 7.x runtime in an authorized isolated environment.'
@@ -39,3 +39,4 @@ foreach (["curl", "gmp", "xmlrpc", "pdo_sqlite"] as $extension) {
 }
 '
 exec "${clean_env[@]}" "$php_bin" "$root/vendor/bin/phpunit" --configuration "$root/phpunit.xml"
+
