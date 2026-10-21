@@ -92,6 +92,26 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("There is no offer for this quantity!", remove_offer_source)
         self.assertIn("You must have at least one offer!", remove_offer_source)
 
+    def test_empty_checkout_is_rejected_before_transaction(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("public function persist(")
+        persist_source = source[start:]
+
+        items = "$items = Cart::getCart()->items();"
+        empty_guard = "if (empty($items))"
+        transaction = "DB::transaction("
+        message = "Add at least one product before opening checkout."
+
+        for contract in (items, empty_guard, transaction, message):
+            self.assertIn(contract, persist_source)
+        self.assertLess(persist_source.index(items), persist_source.index(empty_guard))
+        self.assertLess(
+            persist_source.index(empty_guard),
+            persist_source.index(transaction),
+        )
+
     def test_featured_removal_request_uses_products_permission_gate(self):
         source = (
             self.root
