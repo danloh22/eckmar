@@ -140,6 +140,31 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
                 self.assertIn(view, method_source)
                 self.assertLess(method_source.index(guard), method_source.index(view))
 
+    def test_profile_ticket_reads_and_replies_require_owner(self):
+        source = (
+            self.root / "app/Http/Controllers/ProfileController.php"
+        ).read_text(encoding="utf-8")
+        guard = (
+            "abort_unless((string) $ticket->user_id === "
+            "(string) auth()->id(), 403);"
+        )
+
+        tickets_start = source.index("public function tickets(Ticket $ticket = null)")
+        tickets_end = source.index("public function newTicket(", tickets_start)
+        tickets_source = source[tickets_start:tickets_end]
+        self.assertIn(guard, tickets_source)
+        self.assertIn("$ticket -> replies()", tickets_source)
+        self.assertLess(tickets_source.index(guard), tickets_source.index("$ticket -> replies()"))
+
+        reply_start = source.index("public function newTicketMessage(")
+        reply_source = source[reply_start:]
+        self.assertIn(guard, reply_source)
+        self.assertIn("TicketReply::postReply($ticket", reply_source)
+        self.assertLess(
+            reply_source.index(guard),
+            reply_source.index("TicketReply::postReply($ticket"),
+        )
+
     def test_featured_removal_request_uses_products_permission_gate(self):
         source = (
             self.root
