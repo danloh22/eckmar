@@ -11,6 +11,9 @@ for unsafe in .env .env.testing bootstrap/cache/config.php; do
     [[ ! -e "$root/$unsafe" && ! -L "$root/$unsafe" ]] || fail "Refusing test run: $unsafe exists. Use a disposable checkout without environment files or cached configuration."
 done
 php_bin="$(command -v php)" || fail 'PHP is unavailable; install the locked-compatible PHP 7.x runtime in an authorized isolated environment.'
+for required_dir in vendor vendor/bin; do
+    [[ -d "$root/$required_dir" && ! -L "$root/$required_dir" ]] || fail "Missing or symlinked $required_dir directory; prepare locked dependencies directly in an authorized isolated environment."
+done
 for required in composer.lock phpunit.xml vendor/autoload.php vendor/bin/phpunit; do
     [[ -f "$root/$required" && ! -L "$root/$required" ]] || fail "Missing or symlinked $required; prepare locked dependencies directly in an authorized isolated environment."
 done
