@@ -68,6 +68,25 @@ class IsolatedRunnerTest(unittest.TestCase):
         self.assertIn("bootstrap/cache is symlinked", result.stderr)
         self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
 
+    def test_refuses_symlinked_storage_directories_before_php(self):
+        external_storage = self.root / "external-storage"
+        (external_storage / "framework").mkdir(parents=True)
+        (self.root / "storage").symlink_to(external_storage, target_is_directory=True)
+        result = self.run_script()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("storage is symlinked", result.stderr)
+        self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
+
+        (self.root / "storage").unlink()
+        (self.root / "storage").mkdir()
+        external_framework = self.root / "external-framework"
+        external_framework.mkdir()
+        (self.root / "storage/framework").symlink_to(external_framework, target_is_directory=True)
+        result = self.run_script()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("storage/framework is symlinked", result.stderr)
+        self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
+
     def test_refuses_missing_locked_dependencies_before_php(self):
         for name in ("composer.lock", "phpunit.xml", "vendor/autoload.php", "vendor/bin/phpunit"):
             with self.subTest(name=name):
