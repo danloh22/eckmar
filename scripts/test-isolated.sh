@@ -12,7 +12,7 @@ for unsafe in .env .env.testing bootstrap/cache/config.php; do
 done
 php_bin="$(command -v php)" || fail 'PHP is unavailable; install the locked-compatible PHP 7.x runtime in an authorized isolated environment.'
 for required in composer.lock phpunit.xml vendor/autoload.php vendor/bin/phpunit; do
-    [[ -f "$root/$required" ]] || fail "Missing $required; prepare locked dependencies in an authorized isolated environment."
+    [[ -f "$root/$required" && ! -L "$root/$required" ]] || fail "Missing or symlinked $required; prepare locked dependencies directly in an authorized isolated environment."
 done
 
 # Do not forward shell database, wallet, mail or cloud credentials into PHP.
