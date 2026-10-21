@@ -155,7 +155,7 @@ class VendorController extends Controller
 
         try{
             // old offers on products
-            if($product && $product -> exists()){
+            if ($product && $product->exists) {
                 if($product -> offers() -> count() == 1)
                     throw new RequestException('You must have at least one offer!');
 
