@@ -123,7 +123,7 @@ class ConvertedOfferPriceTest extends TestCase
     {
         $product = Mockery::mock(Product::class)->makePartial();
         $product->id = 'conversion-product';
-        $product->shouldReceive('exists')->once()->andReturn(true);
+        $product->exists = true;
         return $product;
     }
 
