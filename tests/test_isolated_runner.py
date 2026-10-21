@@ -87,6 +87,21 @@ class IsolatedRunnerTest(unittest.TestCase):
         self.assertIn("storage/framework is symlinked", result.stderr)
         self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
 
+    def test_refuses_symlinked_nested_storage_directories_before_php(self):
+        external_runtime = self.root / "external-runtime"
+        external_runtime.mkdir()
+        for name in ("storage/logs", "storage/framework/cache",
+                     "storage/framework/sessions", "storage/framework/views"):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.symlink_to(external_runtime, target_is_directory=True)
+                result = self.run_script()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{name} is symlinked", result.stderr)
+                self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
+                path.unlink()
+
     def test_refuses_symlinked_source_directories_before_php(self):
         external_source = self.root / "external-source"
         external_source.mkdir()
