@@ -75,6 +75,28 @@ class IsolatedRunnerTest(unittest.TestCase):
                 path.unlink()
                 path.touch()
 
+    def test_refuses_symlinked_vendor_directories_before_php(self):
+        external_vendor = self.root / "external-vendor"
+        (external_vendor / "bin").mkdir(parents=True)
+        (external_vendor / "autoload.php").touch()
+        (external_vendor / "bin/phpunit").touch()
+
+        shutil.rmtree(self.root / "vendor")
+        (self.root / "vendor").symlink_to(external_vendor, target_is_directory=True)
+        result = self.run_script()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("vendor directory", result.stderr)
+        self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
+
+        (self.root / "vendor").unlink()
+        (self.root / "vendor").mkdir()
+        (self.root / "vendor/autoload.php").touch()
+        (self.root / "vendor/bin").symlink_to(external_vendor / "bin", target_is_directory=True)
+        result = self.run_script()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("vendor/bin directory", result.stderr)
+        self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
+
     def test_refuses_configuration_overrides(self):
         result = self.run_script("--configuration", "/tmp/other.xml")
         self.assertNotEqual(result.returncode, 0)
