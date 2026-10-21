@@ -48,3 +48,8 @@ The runner now rejects symlinked `storage` and `storage/framework` directories b
 ## Runner source-directory hardening on 21 October 2026
 
 The runner now rejects symlinked `app`, `config`, `database` and `tests` directories before invoking PHP. This ensures PHPUnit executes the reviewed application, configuration, migrations and tests from the disposable checkout rather than source trees outside it. `bash -n scripts/test-isolated.sh` and all eleven Python runner-contract tests passed, including all four source-directory cases. These are shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
+
+
+## Runner route/resource isolation on 21 October 2026
+
+The runner now also rejects symlinked `routes` and `resources` directories before invoking PHP. Route definitions, views and other framework resources must therefore come from the reviewed disposable checkout rather than an external tree. `bash -n scripts/test-isolated.sh` and all twelve Python runner-contract tests passed, including both new directory cases. These remain shell-runner tests using a PHP stand-in; PHP syntax checks, PHPUnit, Laravel and MySQL were not executed.
