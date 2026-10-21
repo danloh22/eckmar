@@ -66,6 +66,32 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         )
 
 
+    def test_persisted_offer_removal_validates_target_and_remaining_tier(self):
+        start = self.controller_source.index("public function removeOffer")
+        end = self.controller_source.index("public function addDeliveryShow", start)
+        remove_offer_source = self.controller_source[start:end]
+
+        target = "$offersToRemove = $product->offers()->where('min_quantity', $quantity);"
+        missing_guard = "if (!$offersToRemove->exists())"
+        remaining_guard = (
+            "if (!$product->offers()->where('min_quantity', '!=', $quantity)->exists())"
+        )
+        mutation = "$offersToRemove->update(['deleted' => 1]);"
+
+        for contract in (target, missing_guard, remaining_guard, mutation):
+            self.assertIn(contract, remove_offer_source)
+        self.assertLess(remove_offer_source.index(target), remove_offer_source.index(missing_guard))
+        self.assertLess(
+            remove_offer_source.index(missing_guard),
+            remove_offer_source.index(remaining_guard),
+        )
+        self.assertLess(
+            remove_offer_source.index(remaining_guard),
+            remove_offer_source.index(mutation),
+        )
+        self.assertIn("There is no offer for this quantity!", remove_offer_source)
+        self.assertIn("You must have at least one offer!", remove_offer_source)
+
     def test_featured_removal_request_uses_products_permission_gate(self):
         source = (
             self.root
