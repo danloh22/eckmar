@@ -60,6 +60,21 @@ class IsolatedRunnerTest(unittest.TestCase):
                 self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
                 path.touch()
 
+    def test_refuses_symlinked_locked_dependencies_before_php(self):
+        target = self.root / "external-artifact"
+        target.touch()
+        for name in ("composer.lock", "phpunit.xml", "vendor/autoload.php", "vendor/bin/phpunit"):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.unlink()
+                path.symlink_to(target)
+                result = self.run_script()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(name, result.stderr)
+                self.assertNotIn("PHP_STAND_IN_CALLED", result.stdout)
+                path.unlink()
+                path.touch()
+
     def test_refuses_configuration_overrides(self):
         result = self.run_script("--configuration", "/tmp/other.xml")
         self.assertNotEqual(result.returncode, 0)
