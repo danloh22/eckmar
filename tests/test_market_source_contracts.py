@@ -165,6 +165,18 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             reply_source.index("TicketReply::postReply($ticket"),
         )
 
+    def test_ticket_title_validation_matches_database_string_limit(self):
+        request_source = (
+            self.root / "app/Http/Requests/Profile/NewTicketRequest.php"
+        ).read_text(encoding="utf-8")
+        migration_source = (
+            self.root
+            / "database/migrations/2019_02_16_185709_create_tickets_table.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("'title' => 'required|string|max:255'", request_source)
+        self.assertIn("$table -> string('title');", migration_source)
+
     def test_featured_removal_request_uses_products_permission_gate(self):
         source = (
             self.root
