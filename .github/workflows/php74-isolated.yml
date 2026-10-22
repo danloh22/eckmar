@@ -23,7 +23,8 @@ jobs:
           persist-credentials: false
       - name: Install system packages and required PHP extensions
         run: |
-          apt-get update
+          rm -rf /var/lib/apt/lists/*
+          apt-get -o Acquire::http::No-Cache=true update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git unzip libcurl4-openssl-dev libgmp-dev libsqlite3-dev libxml2-dev libzip-dev
           docker-php-ext-install curl gmp pdo_sqlite xmlrpc zip
       - name: Install Composer 2.2 LTS
