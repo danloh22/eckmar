@@ -181,6 +181,39 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $this->assertSame(3, DB::table('wallet_ledger_entries')->count());
     }
 
+
+    public function testEscrowReleaseRollsBackWhenMarketFeeWalletIsNotConfigured()
+    {
+        $service = new WalletLedgerService();
+        $buyerId = '66666666-6666-4666-8666-666666666666';
+        $sellerId = '77777777-7777-4777-8777-777777777777';
+        $purchaseId = '88888888-8888-4888-8888-888888888888';
+        DB::table('users')->insert([['id' => $buyerId], ['id' => $sellerId]]);
+        DB::table('purchases')->insert(['id' => $purchaseId, 'buyer_id' => $buyerId]);
+        $purchase = new Purchase();
+        $purchase->id = $purchaseId;
+        $purchase->buyer_id = $buyerId;
+        $purchase->coin_name = 'stb';
+        $purchase->to_pay = '1.00000000';
+        $seller = new User();
+        $seller->id = $sellerId;
+        $seller->exists = true;
+        $wallet = $service->walletFor($buyerId, 'stb');
+        $service->book($wallet, 'deposit', '100000000', '0', 'deposit', null, 'rollback-fixture');
+        $hold = $service->reservePurchase($purchase);
+        try {
+            $service->releasePurchase($purchase, $seller);
+            $this->fail('Missing market fee configuration must reject settlement.');
+        } catch (\App\Exceptions\RequestException $expected) {
+            $this->assertContains('market wallet', $expected->getMessage());
+        }
+        $this->assertSame('active', WalletEscrowHold::findOrFail($hold->id)->status);
+        $this->assertSame('100000000', (string) $wallet->fresh()->reserved_atomic);
+        $this->assertSame('0', (string) $wallet->fresh()->available_atomic);
+        $this->assertSame(2, DB::table('wallet_ledger_entries')->count());
+        $this->assertSame(0, DB::table('wallets')->where('user_id', $sellerId)->count());
+    }
+
     public function testLedgerRejectsOverdraftAndDuplicateKeys()
     {
         $service = new WalletLedgerService();
