@@ -145,6 +145,14 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $this->assertSame('97000000', (string) $service->walletFor($seller->id, 'stb')->available_atomic);
         $this->assertSame('3000000', (string) $service->marketWalletFor('stb')->available_atomic);
         $this->assertSame(5, DB::table('wallet_ledger_entries')->count());
+        try {
+            $service->releasePurchase($purchase, $seller);
+            $this->fail('An already settled escrow must not be paid twice.');
+        } catch (\App\Exceptions\RequestException $expected) {
+            $this->assertSame('Purchase escrow was already settled.', $expected->getMessage());
+        }
+        $this->assertSame(5, DB::table('wallet_ledger_entries')->count());
+        $this->assertSame('97000000', (string) $service->walletFor($seller->id, 'stb')->fresh()->available_atomic);
     }
 
 
