@@ -1,0 +1,42 @@
+name: Legacy PHP 7.4 isolated tests
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/php74-isolated.yml'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'phpunit.xml'
+      - 'scripts/test-isolated.sh'
+      - 'tests/**'
+permissions:
+  contents: read
+jobs:
+  php74:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    container:
+      image: php:7.4-cli-bullseye
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install system packages and required PHP extensions
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git unzip libcurl4-openssl-dev libgmp-dev libsqlite3-dev libxml2-dev libzip-dev
+          docker-php-ext-install curl gmp pdo_sqlite xmlrpc zip
+      - name: Install Composer 2.2 LTS
+        run: |
+          curl -fsSL https://getcomposer.org/download/2.2.25/composer.phar -o /tmp/composer.phar
+          php /tmp/composer.phar --version
+      - name: Install locked dependencies without application scripts
+        env:
+          COMPOSER_ALLOW_SUPERUSER: '1'
+        run: php /tmp/composer.phar install --no-interaction --no-progress --prefer-dist --no-scripts
+      - name: Block outbound network during tests
+        run: |
+          # The test runner itself is not a network sandbox. Do not provide secrets.
+          # An isolated, disposable checkout and empty environment are enforced by the runner.
+          bash scripts/test-isolated.sh
