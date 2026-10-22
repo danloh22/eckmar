@@ -52,4 +52,6 @@ jobs:
         run: |
           # The test runner itself is not a network sandbox. Do not provide secrets.
           # An isolated, disposable checkout and empty environment are enforced by the runner.
+          php -d memory_limit=512M -v
+          printf 'memory_limit=512M\n' > /usr/local/etc/php/conf.d/zz-ci-memory.ini
           bash scripts/test-isolated.sh
