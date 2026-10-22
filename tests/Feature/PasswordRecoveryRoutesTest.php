@@ -16,7 +16,7 @@ class PasswordRecoveryRoutesTest extends TestCase
         $response = $this->get('/forgotpassword');
 
         $response->assertOk();
-        $response->assertSee('action="/forgotpassword/mnemonic"', false);
+        $response->assertSee('action="'.url('/forgotpassword/mnemonic').'"', false);
     }
 
     /**
