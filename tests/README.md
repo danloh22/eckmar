@@ -69,3 +69,15 @@ The runner now also rejects symlinked `storage/app` and `storage/app/public` dir
 The persisted-offer branch now checks Eloquent's public `exists` state instead of calling it as a method. The converted-price PHPUnit fixture marks its partial product model with `$product->exists = true`, so the test reaches the database persistence path that production uses.
 
 `python3 tests/test_market_source_contracts.py` passed both source-contract tests. These checks prevent the property/method mismatch from returning, but they do not execute PHP, PHPUnit, Laravel or MySQL. The locked PHP 7.x application suite and disposable MySQL concurrency tests remain required.
+
+## Verified isolated CI run (22 October 2026)
+
+GitHub Actions run [39841904670](https://github.com/danloh22/eckmar/actions/runs/39841904670), commit `3cfd6582e077845b150b2d8b478cfb9e428ec845`, completed successfully: **104 tests, 557 assertions**. This supersedes the older notes above about the absence of an executable PHP runtime *for CI only*. The workflow runs PHP 7.4 in a disposable container, installs locked dependencies, and applies PHP 7.4 compatibility edits to the installed Mockery files **only inside that container**. Neither `composer.lock` nor production dependencies are updated by this workaround.
+
+### Production-readiness gates not covered by this result
+
+- **Supported runtime and dependency security:** Laravel 5.7 and PHP 7.4 are legacy/EOL. Inventory dependencies and plan a supported upgrade, then retest before any public deployment. A passing legacy suite is not a vulnerability assessment.
+- **Real database behavior:** Validate migrations, rollback, unique constraints, transactions, deadlock retry, row locks, and simultaneous checkout/escrow flows against a disposable MySQL instance. SQLite in-memory tests cannot establish these properties.
+- **External integrations:** Exercise wallet daemon/RPC connectivity, deposits, withdrawals, escrow settlement, coin-rate API failure handling, messaging, and search indexing against isolated test services or mocks. Do not use live funds, live wallet credentials, or production endpoints.
+- **Deployment controls:** Verify secret management, `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, restricted admin access, worker/scheduler configuration, durable storage, backups, restoration drills, monitoring, and rollback on a separate staging environment.
+- **Release decision:** PR #3 remains a draft until the above checks are evidenced. Do not equate green PHPUnit CI with a production approval or deploy automatically.
