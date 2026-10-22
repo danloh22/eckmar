@@ -44,7 +44,7 @@ class MessageSubmissionRoutesTest extends TestCase
         $conversation->id = 'test-conversation';
         $conversation->shouldReceive('updateTime')->once();
         $request = Mockery::mock(NewConversationRequest::class)->makePartial();
-        $request->replace(['username' => 'receiver', 'message' => 'private message text']);
+        $request->initialize([], ['username' => 'receiver', 'message' => 'private message text'], [], [], [], ['REQUEST_METHOD' => 'POST']);
         $request->shouldReceive('persist')->once()->with($conversation);
         $controller = Mockery::mock(MessageController::class)->makePartial();
         $controller->shouldReceive('authorize')->once()->with('update', $conversation);
