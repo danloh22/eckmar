@@ -91,6 +91,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         Schema::create('market_fee_wallets', function (Blueprint $t) {
             $t->uuid('id')->primary();
             $t->string('coin', 10)->unique();
+            $t->text('address');
             $t->uuid('wallet_id')->nullable();
             $t->timestamps();
         });
@@ -136,6 +137,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
 
         $feeWallet = new MarketFeeWallet();
         $feeWallet->coin = 'stb';
+        $feeWallet->address = 'ci-only-market-fee-wallet';
         $feeWallet->save();
         $service->releasePurchase($purchase, $seller);
         $this->assertSame('released', WalletEscrowHold::findOrFail($hold->id)->status);
