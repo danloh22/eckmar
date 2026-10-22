@@ -147,6 +147,32 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $this->assertSame(5, DB::table('wallet_ledger_entries')->count());
     }
 
+
+    public function testEscrowRefundReturnsReservedFundsWithoutExternalRpc()
+    {
+        $service = new WalletLedgerService();
+        $buyerId = '44444444-4444-4444-8444-444444444444';
+        $purchaseId = '55555555-5555-4555-8555-555555555555';
+        DB::table('users')->insert(['id' => $buyerId]);
+        DB::table('purchases')->insert(['id' => $purchaseId, 'buyer_id' => $buyerId]);
+
+        $purchase = new Purchase();
+        $purchase->id = $purchaseId;
+        $purchase->buyer_id = $buyerId;
+        $purchase->coin_name = 'stb';
+        $purchase->to_pay = '0.50000000';
+
+        $wallet = $service->walletFor($buyerId, 'stb');
+        $service->book($wallet, 'deposit', '50000000', '0', 'deposit', null, 'refund-fixture');
+        $hold = $service->reservePurchase($purchase);
+        $service->refundPurchase($purchase);
+
+        $this->assertSame('refunded', WalletEscrowHold::findOrFail($hold->id)->status);
+        $this->assertSame('50000000', (string) $wallet->fresh()->available_atomic);
+        $this->assertSame('0', (string) $wallet->fresh()->reserved_atomic);
+        $this->assertSame(3, DB::table('wallet_ledger_entries')->count());
+    }
+
     public function testLedgerRejectsOverdraftAndDuplicateKeys()
     {
         $service = new WalletLedgerService();
