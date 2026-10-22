@@ -121,7 +121,7 @@ class ConvertedOfferPriceTest extends TestCase
 
     private function editingProduct()
     {
-        $product = Mockery::mock(Product::class)->makePartial();
+        $product = new Product();
         $product->id = 'conversion-product';
         $product->exists = true;
         return $product;
