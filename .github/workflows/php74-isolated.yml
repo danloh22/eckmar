@@ -51,6 +51,33 @@ jobs:
           # without rejecting Composer's own PHPUnit launcher.
           COMPOSER_BIN_COMPAT: full
         run: php /tmp/composer.phar install --no-interaction --no-progress --prefer-dist --no-scripts
+      - name: Adapt locked Mockery 1.2.2 to PHP 7.4 reflection
+        run: |
+          php -r '
+          $path = "vendor/mockery/mockery/library/Mockery/Generator/Parameter.php";
+          $source = file_get_contents($path);
+          $before = "return (string) " . '
+        run: |
+          # The test runner itself is not a network sandbox. Do not provide secrets.
+          # An isolated, disposable checkout and empty environment are enforced by the runner.
+          php -d memory_limit=512M -v
+          printf 'memory_limit=512M\nerror_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED\n' > /usr/local/etc/php/conf.d/zz-ci-memory.ini
+          bash scripts/test-isolated.sh
+ . "this->rfp->getType();";
+          $after = "return " . '
+        run: |
+          # The test runner itself is not a network sandbox. Do not provide secrets.
+          # An isolated, disposable checkout and empty environment are enforced by the runner.
+          php -d memory_limit=512M -v
+          printf 'memory_limit=512M\nerror_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED\n' > /usr/local/etc/php/conf.d/zz-ci-memory.ini
+          bash scripts/test-isolated.sh
+ . "this->rfp->getType()->getName();";
+          if (substr_count($source, $before) !== 1) {
+              fwrite(STDERR, "Unexpected Mockery version; refusing to patch vendor.\n");
+              exit(1);
+          }
+          file_put_contents($path, str_replace($before, $after, $source));
+          '
       - name: Run isolated PHPUnit suite
         run: |
           # The test runner itself is not a network sandbox. Do not provide secrets.
