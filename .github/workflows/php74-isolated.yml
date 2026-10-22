@@ -54,6 +54,8 @@ jobs:
       - name: Adapt legacy Mockery reflection for PHP 7.4
         run: |
           sed -i 's/return (string) \$this->rfp->getType();/return \$this->rfp->getType()->getName();/' vendor/mockery/mockery/library/Mockery/Generator/Parameter.php
+          sed -i 's/\$returnType = (string) \$this->method->getReturnType();/\$returnType = \$this->method->getReturnType()->getName();/' vendor/mockery/mockery/library/Mockery/Generator/Method.php
+          grep -F '$returnType = $this->method->getReturnType()->getName();' vendor/mockery/mockery/library/Mockery/Generator/Method.php
           grep -F 'return $this->rfp->getType()->getName();' vendor/mockery/mockery/library/Mockery/Generator/Parameter.php
       - name: Run isolated PHPUnit suite
         run: |
