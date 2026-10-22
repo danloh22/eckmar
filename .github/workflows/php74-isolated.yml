@@ -51,10 +51,10 @@ jobs:
           # without rejecting Composer's own PHPUnit launcher.
           COMPOSER_BIN_COMPAT: full
         run: php /tmp/composer.phar install --no-interaction --no-progress --prefer-dist --no-scripts
-      - name: Block outbound network during tests
+      - name: Run isolated PHPUnit suite
         run: |
           # The test runner itself is not a network sandbox. Do not provide secrets.
           # An isolated, disposable checkout and empty environment are enforced by the runner.
           php -d memory_limit=512M -v
-          printf 'memory_limit=512M\n' > /usr/local/etc/php/conf.d/zz-ci-memory.ini
+          printf 'memory_limit=512M\nerror_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED\n' > /usr/local/etc/php/conf.d/zz-ci-memory.ini
           bash scripts/test-isolated.sh
