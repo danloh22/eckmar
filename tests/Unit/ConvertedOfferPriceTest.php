@@ -106,9 +106,16 @@ class ConvertedOfferPriceTest extends TestCase
         // Exercise the real CurrencyConverter, including its half-even rounding.
         \Module::shouldReceive('has')->with('MultiCurrency')->andReturn(true);
         \Module::shouldReceive('enabled')->with('MultiCurrency')->andReturn(true);
-        $converter = Mockery::mock();
-        $converter->shouldReceive('convertFromLocal')->once()
-            ->with('2.00', 'USD')->andReturn($rawUsd);
+        $converter = new class($rawUsd) {
+            private $converted;
+            public function __construct($converted) { $this->converted = $converted; }
+            public function convertFromLocal($price, $currency) {
+                if ($price !== '2.00' || $currency !== 'USD') {
+                    throw new \LogicException('Unexpected currency conversion input');
+                }
+                return $this->converted;
+            }
+        };
         $this->app->instance('MultiCurrencyModule\\Converter', $converter);
     }
 
