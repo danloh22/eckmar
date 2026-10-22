@@ -4,6 +4,24 @@
         Index
     </a>
 
+    @hasAccess('withdrawals')
+    <a class="nav-link @isroute('admin.wallet.withdrawals') active @endisroute" href="{{ route('admin.wallet.withdrawals') }}">
+        <i class="fas fa-wallet mr-2"></i>
+        Withdrawals
+    </a>
+    @endhasAccess
+
+    @hasAccess('wallets')
+    <a class="nav-link @isroute('admin.wallets') active @endisroute" href="{{ route('admin.wallets') }}">
+        <i class="fas fa-coins mr-2"></i>
+        User wallets
+    </a>
+    <a class="nav-link @isroute('admin.wallet.exchanges') active @endisroute" href="{{ route('admin.wallet.exchanges') }}">
+        <i class="fas fa-exchange-alt mr-2"></i>
+        Wallet exchanges
+    </a>
+    @endhasAccess
+
     @hasAccess('categories')
     <a class="nav-link @isroute('admin.categories') active @endisroute" href="{{ route('admin.categories') }}">
         <i class="fas fa-list mr-2"></i>
@@ -26,7 +44,7 @@
     @endhasAccess
 
     @hasAccess('products')
-    <a class="nav-link @isroute('admin.product') active @endisroute" href="{{ route('admin.products') }}">
+    <a class="nav-link @isroute('admin.products') active @endisroute @isroute('admin.product.edit') active @endisroute" href="{{ route('admin.products') }}">
         <i class="fas fa-shopping-bag mr-2"></i>
         Products
     </a>
@@ -34,7 +52,7 @@
 
     @hasAccess('products')
     @isModuleEnabled('FeaturedProducts')
-    <a class="nav-link @isroute('admin.featuredproducts') active @endisroute" href="{{ route('admin.featuredproducts.show') }}">
+    <a class="nav-link @isroute('admin.featuredproducts.show') active @endisroute" href="{{ route('admin.featuredproducts.show') }}">
         <i class="fas fa-medal mr-2"></i>
         Featured Products
     </a>

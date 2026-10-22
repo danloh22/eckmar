@@ -7,7 +7,9 @@ use App\Marketplace\Cart;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Services\WalletLedgerService;
 use Illuminate\Validation\Rule;
+use App\Events\Purchase\NewPurchase;
 
 class MakePurchasesRequest extends FormRequest
 {
@@ -33,31 +35,53 @@ class MakePurchasesRequest extends FormRequest
         ];
     }
 
-    public function persist()
+    public function persist(WalletLedgerService $ledger = null)
     {
+        $ledger = $ledger ?: app(WalletLedgerService::class);
+        $purchases = [];
         try{
-            DB::beginTransaction();
-            // foreach item in cart
-            foreach (Cart::getCart() -> items() as $productId => $item){
-                // Purchase procedure
-                $item -> purchased();
-                // Persist the purchase
-                $item -> save();
+            $items = Cart::getCart()->items();
+            if (empty($items)) {
+                throw new RequestException('Add at least one product before opening checkout.');
             }
-            DB::commit();
+            ksort($items);
+            // Keep session models untouched on rollback and later manual retries.
+            // Clone preserves the cart purchase ID; fresh relations prevent shared
+            // cached model instances from being changed by checkout processing.
+            $items = array_map(function ($item) {
+                $purchase = clone $item;
+                $purchase->setRelations([]);
+                return $purchase;
+            }, $items);
+            // Do not automatically retry this closure: rollback does not reset the
+            // captured Eloquent models' exists/attributes or the purchases list.
+            // Reusing them after a deadlock could update an insert that rolled back.
+            DB::transaction(function () use ($items, $ledger, &$purchases) {
+                foreach ($items as $item) {
+                    $item->purchased();
+                    $item->save();
+                    $ledger->reservePurchase($item);
+                    $purchases[] = $item;
+                }
+            });
             // Clear cart after commiting
             Cart::getCart() -> clearCart();
         }
         catch(RequestException $requestException){
-            DB::rollBack();
             Log::error($requestException -> getMessage());
             throw new RequestException($requestException -> getMessage());
         }
         catch (\Exception $e){
-            \Illuminate\Support\Facades\Log::error($e->getMessage());
-            DB::rollBack();
             Log::error($e -> getMessage());
             throw new RequestException('Error happened! Try again later!');
+        }
+
+        foreach ($purchases as $purchase) {
+            try {
+                event(new NewPurchase($purchase));
+            } catch (\Exception $exception) {
+                report($exception);
+            }
         }
     }
 }

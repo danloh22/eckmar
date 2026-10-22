@@ -1,5 +1,5 @@
 Some required software is constantly updated and changed so you should always look for up-to-date version of software online.
-You do not need to follow this tutorial. You can host **Peralta** on whatever server or system you want as long as your server meets the requiremnets.
+You do not need to follow this tutorial. You can host **Eckmar** on whatever server or system you want as long as your server meets the requirements.
 
 <details>
   <summary>If your VPS doesn't have 2GB of RAM</summary>
@@ -365,9 +365,9 @@ nginx: configuration file /etc/nginx/nginx.conf test is successful
 
 # Installation
 
-After everything above is done, change current directory to the directory name you previously chose (I used **peralta**) and run series of commands to install all required dependencies:
+After everything above is done, change current directory to the directory name you previously chose (I used **eckmar**) and run the following commands to install all required dependencies:
 ```
-cd /var/www/peralta
+cd /var/www/eckmar
 ```
 ```
 composer install
@@ -428,6 +428,24 @@ sudo service nginx restart
 ```
 
 Your basic marketplace is working now, `Congratulations !`
+
+# Scheduler and live rates
+
+Wallet deposit scans, approved withdrawal broadcasts, fee sweeps, and automatic purchase releases require Laravel's scheduler. Add the following entry with `crontab -e` for the web-server user (adjust the project path if necessary):
+
+```
+* * * * * cd /var/www/eckmar && php artisan schedule:run >> /dev/null 2>&1
+```
+
+The footer obtains BTC, XMR, and LTC rates from CryptoCompare once per minute. For production, add an API key to `.env`:
+
+```
+CRYPTOCOMPARE_API_KEY=your_api_key
+COIN_RATES_CACHE_MINUTES=1
+DIGITAL_PURCHASE_RELEASE_HOURS=48
+```
+
+Optional footer resource links can be configured through the `FOOTER_*_URL` variables documented in `.env.example`. Empty links are not rendered.
 
 # Connecting coins
 

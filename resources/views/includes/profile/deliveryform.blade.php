@@ -26,9 +26,9 @@
                 <td>{{ $shipping -> to_quantity }}</td>
                 <td class="text-right">
                     @if($shipping -> exists)
-                        <a href="{{ route('profile.vendor.product.delivery.remove', [$shipping -> id, $physicalProduct] ) }}" class="btn btn-sm btn-outline-danger">Remove</a>
+                        <form method="POST" action="{{ route('profile.vendor.product.delivery.remove', [$shipping->id, $physicalProduct]) }}">{{ csrf_field() }}<button type="submit" class="btn btn-sm btn-outline-danger">Remove</button></form>
                     @else
-                        <a href="{{ route('profile.vendor.product.delivery.remove', $i) }}" class="btn btn-sm btn-outline-danger">Remove</a>
+                        <form method="POST" action="{{ route('profile.vendor.product.delivery.remove', $i) }}">{{ csrf_field() }}<button type="submit" class="btn btn-sm btn-outline-danger">Remove</button></form>
                     @endif
                 </td>
             </tr>

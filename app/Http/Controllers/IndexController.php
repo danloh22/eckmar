@@ -12,6 +12,7 @@ use App\Product;
 use App\Vendor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use App\Marketplace\Utility\CoinConverter;
 
 /**
  * Controller for all always public routes
@@ -21,6 +22,15 @@ use Illuminate\Support\Facades\Log;
  */
 class IndexController extends Controller
 {
+    public function rates()
+    {
+        try {
+            return response()->json(CoinConverter::marketRates());
+        } catch (\Exception $exception) {
+            report($exception);
+            return response()->json(['message' => 'Current currency rates are temporarily unavailable.'], 503);
+        }
+    }
     /**
      * Handles the index page request
      *
@@ -49,10 +59,6 @@ class IndexController extends Controller
     public function login() {
 
         return redirect()->route('auth.signin');
-    }
-
-    public function confirmation(Request $request) {
-        return view('confirmation');
     }
 
     /**

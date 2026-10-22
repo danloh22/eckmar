@@ -13,9 +13,7 @@
     <div class="form-group text-right">
 
         @hasAccess('tickets')
-        <a href="{{ route('admin.tickets.solve', $ticket) }}" class="btn btn-warning">
-            Solve Ticket
-        </a>
+        <button type="submit" formaction="{{ route('admin.tickets.solve', $ticket) }}" class="btn btn-warning">Solve Ticket</button>
         @endhasAccess
         <button type="submit" class="btn btn-outline-success">
             Post message
@@ -27,7 +25,7 @@
     <div class="alert text-center alert-success">
         This ticket is solved!
         @hasAccess('tickets')
-        <a href="{{ route('admin.tickets.solve', $ticket) }}" class="btn btn-outline-danger btn-sm">Unsolve</a>
+        <form method="POST" action="{{ route('admin.tickets.solve', $ticket) }}" class="d-inline">{{ csrf_field() }}<button type="submit" class="btn btn-outline-danger btn-sm">Unsolve</button></form>
         @endhasAccess
     </div>
 @endif

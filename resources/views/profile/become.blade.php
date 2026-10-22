@@ -43,7 +43,8 @@
 
     </table>
 
-    <form action="{{ route('profile.vendor.become') }}" class="form-inline">
+    <form action="{{ route('profile.vendor.become') }}" method="POST" class="form-inline">
+        @csrf
         <button type="submit" class="btn btn-lg btn-success">
             <i class="fas fa-file-signature mr-2"></i>
             Become a Vendor

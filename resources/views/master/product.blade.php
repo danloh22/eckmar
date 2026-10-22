@@ -197,7 +197,6 @@
                                            max="{{ $product -> quantity }}"
                                            class="@if($errors -> has('amount')) is-invalid @endif form-control form-control-sm"
                                            placeholder="Amount of {{ str_plural($product -> mesure) }}"/>
-                                />
                                 @endif
                                 <div class="col-md-7">
                                     <button class="btn btn-sm btn-block mb-2 btn-primary"><i class="fas fa-plus mr-2"></i>Add to
@@ -205,14 +204,14 @@
                                     </button>
                                     @auth
                                         @if(auth() -> user() -> isWhishing($product))
-                                            <a href="{{ route('profile.wishlist.add', $product) }}"
+                                            <button type="submit" formaction="{{ route('profile.wishlist.add', $product) }}"
                                                class="btn btn-outline-secondary btn-block btn-sm"><i class="far fa-heart"></i> Remove
                                                 from
-                                                wishlist</a>
+                                                wishlist</button>
                                         @else
-                                            <a href="{{ route('profile.wishlist.add', $product) }}"
+                                            <button type="submit" formaction="{{ route('profile.wishlist.add', $product) }}"
                                                class="btn btn-sm btn-block btn-outline-danger"><i
-                                                        class="fas fa-heart"></i> Add to wishlist</a>
+                                                        class="fas fa-heart"></i> Add to wishlist</button>
                                         @endif
                                     @endauth
                                 </div>

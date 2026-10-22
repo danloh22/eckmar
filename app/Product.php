@@ -274,7 +274,10 @@ class Product extends Model
      * @throws RequestException
      */
     public function substractQuantity($amount) {
-    
+        if ($this->isUnlimited()) {
+            return;
+        }
+
         if ($amount > $this->quantity)
             throw new RequestException('Not enough items, it appears that someone bought in the meantime.');
         $this->quantity -= $amount;

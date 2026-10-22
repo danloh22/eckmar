@@ -28,10 +28,10 @@ Route::middleware(['auth'])->group(function () {
     });
 });
 Route::get('/', 'IndexController@home')->name('home');
+Route::get('/rates', 'IndexController@rates')->middleware('throttle:30,1')->name('market.rates');
 Route::get('/category/{category}', 'IndexController@category') -> name('category.show');
 
 Route::get('/login', 'IndexController@login')->name('login');
-Route::get('/confirmation', 'IndexController@confirmation')->name('confirmation');
 
 Route::get('setview/{list}', 'IndexController@setView') -> name('setview');
 
@@ -42,9 +42,6 @@ Route::get('product/{product}/feedback', 'ProductController@showFeedback') -> na
 Route::get('product/{product}/delivery', 'ProductController@showDelivery') -> name('product.delivery');
 Route::get('product/{product}/vendor', 'ProductController@showVendor') -> name('product.vendor');
 
-// category routes
-Route::get('category/{category}', 'IndexController@category') -> name('category.show');
-
 // vendor routes
 Route::get('vendor/{user}', 'IndexController@vendor') -> name('vendor.show');
 
@@ -52,4 +49,3 @@ Route::get('vendor/{user}/feedback', 'IndexController@vendorsFeedbacks') -> name
 
 Route::post('search','SearchController@search')->name('search');
 Route::get('search','SearchController@searchShow')->name('search.show');
-
