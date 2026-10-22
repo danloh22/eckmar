@@ -4,9 +4,12 @@ on:
   pull_request:
     paths:
       - '.github/workflows/php74-isolated.yml'
+      - 'app/**'
       - 'composer.json'
       - 'composer.lock'
+      - 'database/**'
       - 'phpunit.xml'
+      - 'routes/**'
       - 'scripts/test-isolated.sh'
       - 'tests/**'
 permissions:
@@ -16,15 +19,20 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     container:
-      image: php:7.4-cli-bullseye
+      image: php:7.4-cli-bullseye@sha256:620a6b9f4d4feef2210026172570465e9d0c1de79766418d3affd09190a7fda5
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Install system packages and required PHP extensions
         run: |
+          printf '%s\n' \
+            'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261020T000000Z bullseye main' \
+            'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261020T000000Z bullseye-security main' \
+            > /etc/apt/sources.list
+          rm -f /etc/apt/sources.list.d/*
           rm -rf /var/lib/apt/lists/*
-          apt-get -o Acquire::http::No-Cache=true update
+          apt-get -o Acquire::Retries=3 update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git unzip libcurl4-openssl-dev libgmp-dev libsqlite3-dev libxml2-dev libzip-dev
           docker-php-ext-install curl gmp pdo_sqlite xmlrpc zip
       - name: Install Composer 2.2 LTS
