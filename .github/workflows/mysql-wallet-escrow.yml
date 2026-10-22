@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/php74-isolated.yml'
+      - '.github/workflows/mysql-wallet-escrow.yml'
       - 'app/**'
       - 'composer.json'
       - 'composer.lock'
