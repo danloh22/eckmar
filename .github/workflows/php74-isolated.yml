@@ -17,7 +17,6 @@ jobs:
     timeout-minutes: 20
     container:
       image: php:7.4-cli-bullseye
-      options: --cap-drop=ALL --security-opt=no-new-privileges
     steps:
       - uses: actions/checkout@v4
         with:
