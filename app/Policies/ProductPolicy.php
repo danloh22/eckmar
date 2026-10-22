@@ -42,10 +42,13 @@ class ProductPolicy
      */
     public function update(User $user, Product $product)
     {
-        if(is_null($product))
-            return true;
+        $ownerId = $product->user_id;
+        $userId = $user->getKey();
+        $isOwner = is_scalar($ownerId) && is_scalar($userId)
+            && (string) $ownerId !== '' && (string) $userId !== ''
+            && (string) $ownerId === (string) $userId;
         // product can be updated by the owner or by the admin/moderator
-        return ($product -> user == $user || $user -> isAdmin() || $user -> hasPermission('products')) && $product -> active;
+        return ($isOwner || $user -> isAdmin() || $user -> hasPermission('products')) && $product -> active;
     }
 
     /**

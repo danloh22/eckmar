@@ -155,11 +155,17 @@ class VendorController extends Controller
 
         try{
             // old offers on products
-            if($product && $product -> exists()){
-                if($product -> offers() -> count() == 1)
-                    throw new RequestException('You must have at least one offer!');
+            if ($product && $product->exists) {
+                $offersToRemove = $product->offers()->where('min_quantity', $quantity);
+                if (!$offersToRemove->exists()) {
+                    throw new RequestException('There is no offer for this quantity!');
+                }
 
-                $product -> offers() -> where('min_quantity', $quantity) -> update(['deleted' => 1]);
+                if (!$product->offers()->where('min_quantity', '!=', $quantity)->exists()) {
+                    throw new RequestException('You must have at least one offer!');
+                }
+
+                $offersToRemove->update(['deleted' => 1]);
                 session() -> flash('success', 'You have deleted offer!');
             }
             // new offers
@@ -168,7 +174,7 @@ class VendorController extends Controller
                 $offers = session('product_offers') ?? collect();
 
                 $offers = $offers -> reject(function($offer, $keys) use($quantity){
-                    return $offer -> quantity != $quantity;
+                    return $offer -> min_quantity == $quantity;
                 });
 
                 session() -> put('product_offers', $offers);
