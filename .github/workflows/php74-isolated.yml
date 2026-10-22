@@ -40,9 +40,9 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git unzip libcurl4-openssl-dev libfreetype6-dev libgmp-dev libjpeg62-turbo-dev libpng-dev libsqlite3-dev libxml2-dev libzip-dev
           docker-php-ext-configure gd --with-freetype --with-jpeg
           docker-php-ext-install curl gd gmp pdo_sqlite xmlrpc zip
-      - name: Install Composer 2.2 LTS
+      - name: Install legacy Composer 1.10.27 for Laravel 5.7
         run: |
-          curl -fsSL https://getcomposer.org/download/2.2.25/composer.phar -o /tmp/composer.phar
+          curl -fsSL https://getcomposer.org/download/1.10.27/composer.phar -o /tmp/composer.phar
           php /tmp/composer.phar --version
       - name: Install locked dependencies without application scripts
         env:
