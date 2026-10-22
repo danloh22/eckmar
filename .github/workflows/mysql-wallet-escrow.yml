@@ -1,0 +1,80 @@
+name: Disposable MySQL wallet and escrow integration
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/php74-isolated.yml'
+      - 'app/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'database/**'
+      - 'phpunit.xml'
+      - 'routes/**'
+      - 'scripts/test-isolated.sh'
+      - 'tests/**'
+permissions:
+  contents: read
+jobs:
+  mysql-integration:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    container:
+      image: php:7.4-cli-bullseye@sha256:620a6b9f4d4feef2210026172570465e9d0c1de79766418d3affd09190a7fda5
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: disposable_root_only
+          MYSQL_DATABASE: eckmar_ci
+          MYSQL_USER: eckmar_ci
+          MYSQL_PASSWORD: ci_only_not_a_secret
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u eckmar_ci -pci_only_not_a_secret"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install system packages and required PHP extensions
+        run: |
+          printf '%s\n' \
+            'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261020T000000Z bullseye main' \
+            'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261020T000000Z bullseye-security main' \
+            > /etc/apt/sources.list
+          rm -f /etc/apt/sources.list.d/*
+          # Legacy Bullseye security index references removed packages (404).
+          # Restrict this disposable, non-production PHP 7.4 container to the
+          # main Bullseye repository; never use this image for deployment.
+          sed -i '/bullseye-security/d' /etc/apt/sources.list
+          rm -rf /var/lib/apt/lists/*
+          apt-get -o Acquire::Retries=3 update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git unzip libcurl4-openssl-dev libfreetype6-dev libgmp-dev libjpeg62-turbo-dev libpng-dev libsqlite3-dev libxml2-dev libzip-dev
+          docker-php-ext-configure gd --with-freetype --with-jpeg
+          docker-php-ext-install curl gd gmp pdo_mysql pdo_sqlite xmlrpc zip
+      - name: Install legacy Composer 1.10.27 for Laravel 5.7
+        run: |
+          curl -fsSL https://getcomposer.org/download/1.10.27/composer.phar -o /tmp/composer.phar
+          php /tmp/composer.phar --version
+      - name: Install locked dependencies without application scripts
+        env:
+          COMPOSER_ALLOW_SUPERUSER: '1'
+          # Emit real proxy files so the fail-closed runner can reject symlinks
+          # without rejecting Composer's own PHPUnit launcher.
+          COMPOSER_BIN_COMPAT: full
+        run: php /tmp/composer.phar install --no-interaction --no-progress --prefer-dist --no-scripts
+      - name: Adapt legacy Mockery reflection for PHP 7.4
+        run: |
+          sed -i 's/return (string) \$this->rfp->getType();/return \$this->rfp->getType()->getName();/' vendor/mockery/mockery/library/Mockery/Generator/Parameter.php
+          sed -i 's/\$returnType = (string) \$this->method->getReturnType();/\$returnType = \$this->method->getReturnType()->getName();/' vendor/mockery/mockery/library/Mockery/Generator/Method.php
+          grep -F '$returnType = $this->method->getReturnType()->getName();' vendor/mockery/mockery/library/Mockery/Generator/Method.php
+          grep -F 'return $this->rfp->getType()->getName();' vendor/mockery/mockery/library/Mockery/Generator/Parameter.php
+      - name: Run isolated MySQL integration scenarios
+        env:
+          ECKMAR_DISPOSABLE_MYSQL: 'yes'
+        run: |
+          # The test runner itself is not a network sandbox. Do not provide secrets.
+          # An isolated, disposable checkout and empty environment are enforced by the runner.
+          php -d memory_limit=512M -v
+          printf 'memory_limit=512M\nerror_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED\n' > /usr/local/etc/php/conf.d/zz-ci-memory.ini
+          test ! -e .env && test ! -e .env.testing && test ! -e bootstrap/cache/config.php
+          php vendor/phpunit/phpunit/phpunit --configuration phpunit.xml tests/Integration/MySqlWalletEscrowIntegrationTest.php
