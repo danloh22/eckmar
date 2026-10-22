@@ -47,6 +47,9 @@ jobs:
       - name: Install locked dependencies without application scripts
         env:
           COMPOSER_ALLOW_SUPERUSER: '1'
+          # Emit real proxy files so the fail-closed runner can reject symlinks
+          # without rejecting Composer's own PHPUnit launcher.
+          COMPOSER_BIN_COMPAT: full
         run: php /tmp/composer.phar install --no-interaction --no-progress --prefer-dist --no-scripts
       - name: Block outbound network during tests
         run: |
