@@ -142,6 +142,7 @@ class ProductController extends Controller
     }
 
     public function cloneProductShow(Product $product) {
+        $this->authorize('update', $product);
 
         return view('profile.product.confirmclone')->with([
             'product' => $product
@@ -149,6 +150,7 @@ class ProductController extends Controller
     }
 
     public function cloneProductPost(Product $product) {
+        $this->authorize('update', $product);
 
         DB::beginTransaction();
         try {

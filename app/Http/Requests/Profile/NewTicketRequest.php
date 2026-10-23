@@ -27,7 +27,7 @@ class NewTicketRequest extends FormRequest
     public function rules()
     {
         return [
-            'title' => 'required|string',
+            'title' => 'required|string|max:255',
             'message' => 'required|string'
         ];
     }
