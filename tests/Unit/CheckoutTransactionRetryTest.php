@@ -45,6 +45,26 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertDispatched(NewPurchase::class, 1);
     }
 
+    public function testEmptyCartRejectsCheckoutBeforeOpeningTransaction()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Add at least one product before opening checkout.');
+        session()->forget(Cart::SESSION_NAME);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldNotReceive('transaction');
+
+        try {
+            (new MakePurchasesRequest())->persist($ledger);
+            $this->fail('Empty cart must be rejected.');
+        } catch (RequestException $expected) {
+            $this->assertSame('Add at least one product before opening checkout.', $expected->getMessage());
+        }
+
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     public function testFailedCheckoutsDoNotReplayOrMutateTheSessionPurchase()
     {
         Event::fake([NewPurchase::class]);
