@@ -25,6 +25,7 @@ class CheckoutTransactionRetryTest extends TestCase
         $purchase = new CheckoutPurchaseDouble();
         $purchase->id = 'successful-purchase-id';
         $purchase->message = 'buyer message';
+        $purchase->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
         session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
 
         $reserved = [];
