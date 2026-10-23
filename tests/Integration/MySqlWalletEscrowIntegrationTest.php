@@ -239,6 +239,35 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         }
     }
 
+    public function testLedgerRejectsConflictingIdempotencyReplayWithoutChangingFunds()
+    {
+        $service = new WalletLedgerService();
+        $wallet = $service->walletFor(null, 'stb');
+        $first = $service->book($wallet, 'admin_credit', '50', '0', 'test', null, 'conflict-key');
+
+        foreach ([
+            ['admin_credit', '51', '0', 'test'],
+            ['admin_debit', '50', '0', 'test'],
+            ['admin_credit', '50', '1', 'test'],
+            ['admin_credit', '50', '0', 'different-reference'],
+        ] as $variant) {
+            try {
+                $service->book($wallet, $variant[0], $variant[1], $variant[2], $variant[3], null, 'conflict-key');
+                $this->fail('Conflicting idempotency replay must be rejected.');
+            } catch (\App\Exceptions\RequestException $expected) {
+                $this->assertSame(
+                    'Idempotency key was already used for a different ledger operation.',
+                    $expected->getMessage()
+                );
+            }
+        }
+
+        $replay = $service->book($wallet, 'admin_credit', '50', '0', 'test', null, 'conflict-key');
+        $this->assertSame($first->id, $replay->id);
+        $this->assertSame('50', (string) $wallet->fresh()->available_atomic);
+        $this->assertSame(1, DB::table('wallet_ledger_entries')->count());
+    }
+
     public function testLedgerRejectsOverdraftAndDuplicateKeys()
     {
         $service = new WalletLedgerService();
