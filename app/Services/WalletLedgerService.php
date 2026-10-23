@@ -77,11 +77,32 @@ class WalletLedgerService
     public function coinToAtomic($amount, string $coin): string
     {
         $decimals = (int) config('coins.atomic_decimals.' . $coin);
-        $normalized = is_string($amount) && preg_match('/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/', $amount)
-            ? $amount
-            : number_format((float) $amount, $decimals, '.', '');
+        if ($decimals < 0) {
+            throw new RequestException('Coin precision is not configured correctly.');
+        }
+
+        if (is_int($amount) && $amount >= 0) {
+            $normalized = (string) $amount;
+        } elseif (is_float($amount) && is_finite($amount) && $amount >= 0) {
+            // Floats have already lost their original decimal representation.
+            // Keep the legacy scalar contract, while exact string inputs below
+            // are validated before any precision can be discarded.
+            $normalized = number_format($amount, $decimals, '.', '');
+        } elseif (is_string($amount)
+            && preg_match('/^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$/', $amount)) {
+            $normalized = $amount;
+        } else {
+            throw new RequestException('Amount must be a non-negative decimal value.');
+        }
+
         $parts = explode('.', $normalized, 2);
-        $fraction = str_pad(substr($parts[1] ?? '', 0, $decimals), $decimals, '0');
+        $suppliedFraction = $parts[1] ?? '';
+        $discardedFraction = substr($suppliedFraction, $decimals);
+        if ($discardedFraction !== '' && trim($discardedFraction, '0') !== '') {
+            throw new RequestException('Amount exceeds the supported coin precision.');
+        }
+
+        $fraction = str_pad(substr($suppliedFraction, 0, $decimals), $decimals, '0');
         $atomic = ltrim($parts[0] . $fraction, '0');
         return $atomic === '' ? '0' : $atomic;
     }
