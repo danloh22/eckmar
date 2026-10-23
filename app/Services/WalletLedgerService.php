@@ -112,6 +112,16 @@ class WalletLedgerService
             $lockedWallet = Wallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
             $entry = WalletLedgerEntry::where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
             if ($entry) {
+                // A key identifies exactly one ledger operation, not merely a
+                // request to touch any wallet. Reject conflicting replays.
+                if ((string) $entry->wallet_id !== (string) $lockedWallet->id
+                    || (string) $entry->type !== $type
+                    || (string) $entry->available_delta_atomic !== $availableDelta
+                    || (string) $entry->reserved_delta_atomic !== $reservedDelta
+                    || (string) $entry->reference_type !== $referenceType
+                    || (string) $entry->reference_id !== (string) $referenceId) {
+                    throw new RequestException('Idempotency key was already used for a different ledger operation.');
+                }
                 return $entry;
             }
             if (!$allowFrozen && $lockedWallet->status !== 'active') {
