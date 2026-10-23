@@ -33,7 +33,7 @@ class ProductDisputedNotification
             $content = 'Purchase for a product you bought is being disputed';
             $routeName = 'profile.purchases.single';
             $routeParams = serialize(['purchase'=>$event->purchase->id]);
-            $event->buyer->notify($content,$routeName,$routeParams);
+            $this->notifyOnce($event->buyer, $content, $routeName, $routeParams);
         }
 
         if ($event->initiator == $event->buyer){
@@ -43,10 +43,28 @@ class ProductDisputedNotification
             $content = 'Purchase for a product you sold is being disputed';
             $routeName = 'profile.sales.single';
             $routeParams = serialize(['sale'=>$event->purchase->id]);
-            $event->vendor->user->notify($content,$routeName,$routeParams);
+            $this->notifyOnce($event->vendor->user, $content, $routeName, $routeParams);
+        }
+    }
+
+    /**
+     * Suppress a sequential replay after the notification was persisted.
+     *
+     * The description is part of the identity because several purchase
+     * lifecycle notifications intentionally share the same destination.
+     */
+    private function notifyOnce($user, $content, $routeName, $routeParams)
+    {
+        $alreadyDelivered = $user->notifications()
+            ->where('description', $content)
+            ->where('route_name', $routeName)
+            ->where('route_params', $routeParams)
+            ->exists();
+
+        if ($alreadyDelivered) {
+            return;
         }
 
-
-
+        $user->notify($content, $routeName, $routeParams);
     }
 }
