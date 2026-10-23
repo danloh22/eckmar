@@ -4,6 +4,7 @@ namespace App\Http\Requests\Cart;
 
 use App\Exceptions\RequestException;
 use App\Marketplace\Cart;
+use App\Purchase;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -39,6 +40,8 @@ class MakePurchasesRequest extends FormRequest
     {
         $ledger = $ledger ?: app(WalletLedgerService::class);
         $purchases = [];
+        $items = [];
+        $transactionCompleted = false;
         try{
             $items = Cart::getCart()->items();
             if (empty($items)) {
@@ -64,6 +67,7 @@ class MakePurchasesRequest extends FormRequest
                     $purchases[] = $item;
                 }
             });
+            $transactionCompleted = true;
             // Clear cart after commiting
             Cart::getCart() -> clearCart();
         }
@@ -73,7 +77,31 @@ class MakePurchasesRequest extends FormRequest
         }
         catch (\Exception $e){
             Log::error($e -> getMessage());
-            throw new RequestException('Error happened! Try again later!');
+
+            // Recover only after the transaction returned successfully, or
+            // after a duplicate-key signal that can represent a prior request
+            // committing the same stable purchase UUIDs. Deadlocks and other
+            // definite pre-commit failures retain the normal error path.
+            if (!$transactionCompleted && !$this->isDuplicateIdentityFailure($e)) {
+                throw new RequestException('Error happened! Try again later!');
+            }
+
+            try {
+                $recovered = $this->recoverCommittedCheckout($items);
+            } catch (RequestException $recoveryException) {
+                Log::error($recoveryException->getMessage());
+                throw $recoveryException;
+            } catch (\Exception $recoveryException) {
+                Log::error($recoveryException->getMessage());
+                throw new RequestException('Error happened! Try again later!');
+            }
+
+            if ($recovered === null) {
+                throw new RequestException('Error happened! Try again later!');
+            }
+
+            $purchases = $recovered;
+            Cart::getCart()->clearCart();
         }
 
         foreach ($purchases as $purchase) {
@@ -83,5 +111,73 @@ class MakePurchasesRequest extends FormRequest
                 report($exception);
             }
         }
+    }
+
+    /**
+     * Resolve an ambiguous checkout result from the stable purchase UUIDs.
+     *
+     * No row is a normal pre-commit failure. A partial or conflicting match is
+     * unsafe and must not be retried automatically because that could reserve
+     * funds or decrement inventory twice.
+     *
+     * @param array $items
+     * @return array|null
+     * @throws RequestException
+     */
+    protected function recoverCommittedCheckout(array $items)
+    {
+        if (empty($items)) {
+            return null;
+        }
+
+        $committed = [];
+        foreach ($items as $item) {
+            $purchase = $this->findCommittedPurchase($item->id);
+            if ($purchase === null) {
+                continue;
+            }
+
+            if (!$this->sameCheckoutIdentity($item, $purchase)) {
+                throw new RequestException('Checkout status is inconsistent. Please contact support.');
+            }
+
+            $committed[] = $purchase;
+        }
+
+        if (empty($committed)) {
+            return null;
+        }
+
+        if (count($committed) !== count($items)) {
+            throw new RequestException('Checkout status is inconsistent. Please contact support.');
+        }
+
+        return $committed;
+    }
+
+    protected function findCommittedPurchase($id)
+    {
+        return Purchase::find($id);
+    }
+
+    protected function isDuplicateIdentityFailure(\Exception $exception)
+    {
+        $code = (string) $exception->getCode();
+        $message = strtolower($exception->getMessage());
+
+        return in_array($code, ['23000', '23505'], true)
+            || strpos($message, 'duplicate entry') !== false
+            || strpos($message, 'unique constraint failed') !== false;
+    }
+
+    protected function sameCheckoutIdentity(Purchase $requested, Purchase $committed)
+    {
+        foreach (['buyer_id', 'vendor_id', 'offer_id', 'shipping_id', 'coin_name', 'type'] as $attribute) {
+            if ((string) $requested->getAttribute($attribute) !== (string) $committed->getAttribute($attribute)) {
+                return false;
+            }
+        }
+
+        return (int) $requested->getAttribute('quantity') === (int) $committed->getAttribute('quantity');
     }
 }
