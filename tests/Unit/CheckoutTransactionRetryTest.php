@@ -18,7 +18,8 @@ class CheckoutTransactionRetryTest extends TestCase
 {
     public function testSuccessfulCheckoutClearsCartAndEmitsOneEvent()
     {
-        Event::fake([NewPurchase::class]);
+        // Intercept dispatch directly so no application listeners are executed.
+        Event::shouldReceive('dispatch')->once()->with(Mockery::type(NewPurchase::class));
         CheckoutPurchaseDouble::$startingStates = [];
 
         $purchase = new CheckoutPurchaseDouble();
@@ -43,9 +44,7 @@ class CheckoutTransactionRetryTest extends TestCase
         $this->assertFalse($purchase->exists);
         $this->assertSame('buyer message', $purchase->message);
         $this->assertEmpty(Cart::getCart()->items());
-        // The checkout commits successfully even if downstream event listeners fail.
-        // The legacy event dispatch is not asserted here because the isolated runner
-        // does not register all production listeners.
+        // The dispatch mock verifies exactly one event without invoking listeners.
     }
 
     public function testEmptyCartRejectsCheckoutBeforeOpeningTransaction()
