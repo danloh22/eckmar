@@ -69,7 +69,7 @@ class MakePurchasesRequest extends FormRequest
             });
             $transactionCompleted = true;
             // Clear cart after commiting
-            Cart::getCart() -> clearCart();
+            $this->clearCheckoutCart();
         }
         catch(RequestException $requestException){
             Log::error($requestException -> getMessage());
@@ -101,7 +101,7 @@ class MakePurchasesRequest extends FormRequest
             }
 
             $purchases = $recovered;
-            Cart::getCart()->clearCart();
+            $this->clearCheckoutCart();
         }
 
         foreach ($purchases as $purchase) {
@@ -111,6 +111,18 @@ class MakePurchasesRequest extends FormRequest
                 report($exception);
             }
         }
+    }
+
+    /**
+     * Clear the request cart through one overridable boundary.
+     *
+     * Session stores can fail immediately after the database commit. Keeping
+     * this boundary explicit lets recovery re-check the committed purchase IDs
+     * without rerunning reservations or inventory mutations.
+     */
+    protected function clearCheckoutCart()
+    {
+        Cart::getCart()->clearCart();
     }
 
     /**
