@@ -41,6 +41,7 @@ class MakePurchasesRequest extends FormRequest
         $ledger = $ledger ?: app(WalletLedgerService::class);
         $purchases = [];
         $items = [];
+        $transactionCompleted = false;
         try{
             $items = Cart::getCart()->items();
             if (empty($items)) {
@@ -66,6 +67,7 @@ class MakePurchasesRequest extends FormRequest
                     $purchases[] = $item;
                 }
             });
+            $transactionCompleted = true;
             // Clear cart after commiting
             Cart::getCart() -> clearCart();
         }
@@ -76,9 +78,14 @@ class MakePurchasesRequest extends FormRequest
         catch (\Exception $e){
             Log::error($e -> getMessage());
 
-            // A database commit can succeed even when the client observes a
-            // later session/connection failure. Cart purchase UUIDs are stable,
-            // so an exact persisted match is the durable checkout identity.
+            // Recover only after the transaction returned successfully, or
+            // after a duplicate-key signal that can represent a prior request
+            // committing the same stable purchase UUIDs. Deadlocks and other
+            // definite pre-commit failures retain the normal error path.
+            if (!$transactionCompleted && !$this->isDuplicateIdentityFailure($e)) {
+                throw new RequestException('Error happened! Try again later!');
+            }
+
             try {
                 $recovered = $this->recoverCommittedCheckout($items);
             } catch (RequestException $recoveryException) {
@@ -151,6 +158,16 @@ class MakePurchasesRequest extends FormRequest
     protected function findCommittedPurchase($id)
     {
         return Purchase::find($id);
+    }
+
+    protected function isDuplicateIdentityFailure(\Exception $exception)
+    {
+        $code = (string) $exception->getCode();
+        $message = strtolower($exception->getMessage());
+
+        return in_array($code, ['23000', '23505'], true)
+            || strpos($message, 'duplicate entry') !== false
+            || strpos($message, 'unique constraint failed') !== false;
     }
 
     protected function sameCheckoutIdentity(Purchase $requested, Purchase $committed)
