@@ -29,6 +29,20 @@ class ProductDeliveredNotification
         $content = 'Your product has been marked delivered by buyer ['.$event->buyer->username.']';
         $routeName = 'profile.sales.single';
         $routeParams = serialize(['sales'=>$event->purchase->id]);
+        $notifications = $event->vendor->user->notifications();
+
+        // Lifecycle event delivery may be replayed after a later side effect
+        // fails. The stable purchase route payload identifies an already
+        // persisted notification and suppresses notify() on that replay.
+        $alreadyDelivered = $notifications
+            ->where('route_name', $routeName)
+            ->where('route_params', $routeParams)
+            ->exists();
+
+        if ($alreadyDelivered) {
+            return;
+        }
+
         $event->vendor->user->notify($content,$routeName,$routeParams);
     }
 }
