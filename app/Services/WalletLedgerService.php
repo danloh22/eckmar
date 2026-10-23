@@ -106,12 +106,14 @@ class WalletLedgerService
     public function book(Wallet $wallet, string $type, string $availableDelta, string $reservedDelta, string $referenceType, $referenceId, string $idempotencyKey, $createdBy = null, $reason = null, bool $allowFrozen = false): WalletLedgerEntry
     {
         return DB::transaction(function () use ($wallet, $type, $availableDelta, $reservedDelta, $referenceType, $referenceId, $idempotencyKey, $createdBy, $reason, $allowFrozen) {
-            $entry = WalletLedgerEntry::where('idempotency_key', $idempotencyKey)->first();
+            // Serialize duplicate requests for this wallet before reading the key.
+            // The locking read avoids a stale snapshot after waiting on another
+            // transaction, while the database unique constraint remains a backstop.
+            $lockedWallet = Wallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
+            $entry = WalletLedgerEntry::where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
             if ($entry) {
                 return $entry;
             }
-
-            $lockedWallet = Wallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
             if (!$allowFrozen && $lockedWallet->status !== 'active') {
                 throw new RequestException('Wallet is frozen.');
             }
