@@ -254,6 +254,94 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
     }
 
 
+    private function startLedgerWorker($walletId, $readyFile, $goFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_ledger_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $walletId,
+            $readyFile,
+            $goFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated ledger worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function collectLedgerWorker(array $worker)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, $stderr);
+        $payload = json_decode(trim($stdout), true);
+        $this->assertTrue(is_array($payload), 'Worker did not return JSON: ' . $stdout);
+        $this->assertArrayHasKey('entry_id', $payload);
+
+        return $payload;
+    }
+
+    public function testConcurrentProcessesApplySharedLedgerKeyOnlyOnce()
+    {
+        $service = new WalletLedgerService();
+        $wallet = $service->walletFor(null, 'stb');
+        $token = sys_get_temp_dir() . '/eckmar-ledger-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startLedgerWorker($wallet->id, $readyOne, $goFile);
+            $workers[] = $this->startLedgerWorker($wallet->id, $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $first = $this->collectLedgerWorker($workers[0]);
+            $second = $this->collectLedgerWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame($first['entry_id'], $second['entry_id']);
+            $this->assertSame('80', (string) $wallet->fresh()->available_atomic);
+            $this->assertSame(1, DB::table('wallet_ledger_entries')
+                ->where('idempotency_key', 'parallel-ledger-once')->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
     public function testLedgerDuplicateKeyDoesNotMutateBalanceAcrossSeparateMysqlConnections()
     {
         $service = new WalletLedgerService();
