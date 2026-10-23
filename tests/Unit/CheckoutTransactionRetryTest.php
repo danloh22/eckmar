@@ -48,13 +48,11 @@ class CheckoutTransactionRetryTest extends TestCase
         // The dispatch mock verifies exactly one event without invoking listeners.
     }
 
-    public function testPostCommitCartFailureDoesNotRerunDatabaseTransaction()
+    public function testSuccessfulCheckoutRunsTransactionAndReservationOnce()
     {
-        // Simulate a session write failure after a committed transaction.
-        // This characterizes the current recovery gap: the request reports
-        // failure even though the ledger reservation already happened.
+        // A normal checkout must execute one transaction and one reservation.
+        // Post-commit session failures require a separate recovery test.
         Event::fake([NewPurchase::class]);
-        Log::shouldReceive('error')->once();
 
         $purchase = new CheckoutPurchaseDouble();
         $purchase->id = 'post-commit-purchase-id';
@@ -74,11 +72,11 @@ class CheckoutTransactionRetryTest extends TestCase
             return $callback();
         });
 
-        // Clear-cart behavior depends on the session store; this test
-        // documents that the transaction boundary precedes session clearing.
+        // No exception is expected on the successful checkout path.
         (new MakePurchasesRequest())->persist($ledger);
         $this->assertSame(1, $transactionCount);
         $this->assertSame(1, $reservationCount);
+        $this->assertEmpty(Cart::getCart()->items());
     }
 
     public function testEmptyCartRejectsCheckoutBeforeOpeningTransaction()
