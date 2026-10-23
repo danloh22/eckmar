@@ -16,6 +16,88 @@ use Tests\TestCase;
 
 class CheckoutTransactionRetryTest extends TestCase
 {
+    public function testSuccessfulCheckoutClearsCartAndEmitsOneEvent()
+    {
+        // Intercept dispatch directly so no application listeners are executed.
+        Event::shouldReceive('dispatch')->once()->with(Mockery::type(NewPurchase::class));
+        CheckoutPurchaseDouble::$startingStates = [];
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'successful-purchase-id';
+        $purchase->message = 'buyer message';
+        $purchase->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $reserved = [];
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldReceive('reservePurchase')->once()->andReturnUsing(function (Purchase $item) use (&$reserved) {
+            $reserved[] = $item;
+            return new \App\WalletEscrowHold();
+        });
+        DB::shouldReceive('transaction')->once()->andReturnUsing(function ($callback) {
+            return $callback();
+        });
+
+        (new MakePurchasesRequest())->persist($ledger);
+
+        $this->assertCount(1, $reserved);
+        $this->assertNotSame($purchase, $reserved[0]);
+        $this->assertFalse($purchase->exists);
+        $this->assertSame('buyer message', $purchase->message);
+        $this->assertEmpty(Cart::getCart()->items());
+        // The dispatch mock verifies exactly one event without invoking listeners.
+    }
+
+    public function testSuccessfulCheckoutRunsTransactionAndReservationOnce()
+    {
+        // A normal checkout must execute one transaction and one reservation.
+        // Post-commit session failures require a separate recovery test.
+        Event::fake([NewPurchase::class]);
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'post-commit-purchase-id';
+        $purchase->message = 'buyer message';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $reservationCount = 0;
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldReceive('reservePurchase')->once()->andReturnUsing(function () use (&$reservationCount) {
+            $reservationCount++;
+            return new \App\WalletEscrowHold();
+        });
+
+        $transactionCount = 0;
+        DB::shouldReceive('transaction')->once()->andReturnUsing(function ($callback) use (&$transactionCount) {
+            $transactionCount++;
+            return $callback();
+        });
+
+        // No exception is expected on the successful checkout path.
+        (new MakePurchasesRequest())->persist($ledger);
+        $this->assertSame(1, $transactionCount);
+        $this->assertSame(1, $reservationCount);
+        $this->assertEmpty(Cart::getCart()->items());
+    }
+
+    public function testEmptyCartRejectsCheckoutBeforeOpeningTransaction()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Add at least one product before opening checkout.');
+        session()->forget(Cart::SESSION_NAME);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+
+        try {
+            (new MakePurchasesRequest())->persist($ledger);
+            $this->fail('Empty cart must be rejected.');
+        } catch (RequestException $expected) {
+            $this->assertSame('Add at least one product before opening checkout.', $expected->getMessage());
+        }
+
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     public function testFailedCheckoutsDoNotReplayOrMutateTheSessionPurchase()
     {
         Event::fake([NewPurchase::class]);
@@ -98,7 +180,7 @@ class CheckoutPurchaseDouble extends Purchase
         if ($this->relationLoaded('offer')) {
             $this->getRelation('offer')->title = 'mutated cached offer';
         }
-        $this->setRelation('offer', (object) ['title' => 'fresh offer']);
+        $this->setRelation('offer', (object) ['title' => 'fresh offer', 'product' => (object) ['id' => 'product-id']]);
     }
 
     public function save(array $options = [])

@@ -113,7 +113,7 @@ Route::prefix('profile')->group(function(){
         Route::post('messages/conversation/new', 'MessageController@startConversation') -> name('profile.messages.conversation.new');
         Route::get('messages/conversations/list', 'MessageController@listConversations') -> name('profile.messages.conversations.list');
         Route::post('messages/{conversation}/message/new', 'MessageController@newMessage') -> name('profile.messages.message.new');
-        Route::get('messages/{conversation}/sendmessage', 'MessageController@newMessage') -> name('profile.messages.send.message'); // get request for redirecting from new conversation
+        Route::post('messages/{conversation}/sendmessage', 'MessageController@newMessage') -> name('profile.messages.send.message'); // Legacy named endpoint remains POST-only
     });
     Route::get('messages/decrypt/key','MessageController@decryptKeyShow')->name('profile.messages.decrypt.show');
     Route::post('messages/decrypt/key','MessageController@decryptKeyPost')->name('profile.messages.decrypt.post');

@@ -2,9 +2,7 @@
 
 namespace App\Http\Requests\Profile;
 
-use Illuminate\Foundation\Http\FormRequest;
-
-class NewConversationRequest extends FormRequest
+class NewConversationRequest extends NewMessageRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,10 +21,9 @@ class NewConversationRequest extends FormRequest
      */
     public function rules()
     {
-        return [
+        return array_merge(parent::rules(), [
             'username' => 'required|exists:users,username',
-            'message' => 'required|string'
-        ];
+        ]);
     }
 
     public function messages()

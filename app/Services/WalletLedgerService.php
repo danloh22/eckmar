@@ -106,12 +106,24 @@ class WalletLedgerService
     public function book(Wallet $wallet, string $type, string $availableDelta, string $reservedDelta, string $referenceType, $referenceId, string $idempotencyKey, $createdBy = null, $reason = null, bool $allowFrozen = false): WalletLedgerEntry
     {
         return DB::transaction(function () use ($wallet, $type, $availableDelta, $reservedDelta, $referenceType, $referenceId, $idempotencyKey, $createdBy, $reason, $allowFrozen) {
-            $entry = WalletLedgerEntry::where('idempotency_key', $idempotencyKey)->first();
+            // Serialize duplicate requests for this wallet before reading the key.
+            // The locking read avoids a stale snapshot after waiting on another
+            // transaction, while the database unique constraint remains a backstop.
+            $lockedWallet = Wallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
+            $entry = WalletLedgerEntry::where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
             if ($entry) {
+                // A key identifies exactly one ledger operation, not merely a
+                // request to touch any wallet. Reject conflicting replays.
+                if ((string) $entry->wallet_id !== (string) $lockedWallet->id
+                    || (string) $entry->type !== $type
+                    || (string) $entry->available_delta_atomic !== $availableDelta
+                    || (string) $entry->reserved_delta_atomic !== $reservedDelta
+                    || (string) $entry->reference_type !== $referenceType
+                    || (string) $entry->reference_id !== (string) $referenceId) {
+                    throw new RequestException('Idempotency key was already used for a different ledger operation.');
+                }
                 return $entry;
             }
-
-            $lockedWallet = Wallet::where('id', $wallet->id)->lockForUpdate()->firstOrFail();
             if (!$allowFrozen && $lockedWallet->status !== 'active') {
                 throw new RequestException('Wallet is frozen.');
             }

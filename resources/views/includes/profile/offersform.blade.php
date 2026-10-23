@@ -32,7 +32,7 @@
     {{ csrf_field() }}
     <div class="form-row">
         <div class="col">
-            <input type="number" step=".01" min="0.01" class="form-control @error('price', $errors) is-invalid @enderror" name="price" value="{{ old('min_quantity') }}" placeholder="Price in {{ \App\Marketplace\Utility\CurrencyConverter::getLocalSymbol() }}">
+            <input type="number" step=".01" min="0.01" class="form-control @error('price', $errors) is-invalid @enderror" name="price" value="{{ old('price') }}" placeholder="Price in {{ \App\Marketplace\Utility\CurrencyConverter::getLocalSymbol() }}">
             @error('price', $errors)
             <div class="invalid-feedback">
                 {{ $errors -> first('price') }}
@@ -40,10 +40,10 @@
             @enderror
         </div>
         <div class="col">
-            <input type="min_quantity" step="1" min="1" class="form-control @error('min_quantity', $errors) is-invalid @enderror" value="{{ old('min_quantity') }}" name="min_quantity" placeholder="Minimum quantity for this price">
-            @error('price', $errors)
+            <input type="number" step="1" min="1" class="form-control @error('min_quantity', $errors) is-invalid @enderror" value="{{ old('min_quantity') }}" name="min_quantity" placeholder="Minimum quantity for this price">
+            @error('min_quantity', $errors)
             <div class="invalid-feedback">
-                {{ $errors -> first('price') }}
+                {{ $errors -> first('min_quantity') }}
             </div>
             @enderror
         </div>
