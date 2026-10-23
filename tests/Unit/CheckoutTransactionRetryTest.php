@@ -149,7 +149,7 @@ class CheckoutPurchaseDouble extends Purchase
         if ($this->relationLoaded('offer')) {
             $this->getRelation('offer')->title = 'mutated cached offer';
         }
-        $this->setRelation('offer', (object) ['title' => 'fresh offer']);
+        $this->setRelation('offer', (object) ['title' => 'fresh offer', 'product' => (object) ['id' => 'product-id']]);
     }
 
     public function save(array $options = [])
