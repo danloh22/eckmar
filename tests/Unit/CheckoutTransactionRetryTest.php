@@ -98,6 +98,83 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    public function testAmbiguousCommitRecoversMatchingPersistedPurchases()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Lost connection after commit');
+
+        $purchase = new Purchase();
+        $purchase->id = 'recoverable-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->exists = true;
+        $committed->setRelation('buyer', (object) ['id' => 'buyer-id']);
+        $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
+        $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
+
+        $request = new CheckoutRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Lost connection after commit'));
+
+        $request->persist($ledger);
+
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertDispatched(NewPurchase::class, function (NewPurchase $event) use ($committed) {
+            return $event->purchase === $committed;
+        });
+    }
+
+    public function testAmbiguousCommitFailsClosedOnConflictingIdentity()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Lost connection after commit');
+        Log::shouldReceive('error')->once()->with('Checkout status is inconsistent. Please contact support.');
+
+        $purchase = new Purchase();
+        $purchase->id = 'conflicting-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->quantity = 1;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->buyer_id = 'different-buyer-id';
+        $committed->exists = true;
+
+        $request = new CheckoutRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Lost connection after commit'));
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Conflicting persisted identity must fail closed.');
+        } catch (RequestException $exception) {
+            $this->assertSame('Checkout status is inconsistent. Please contact support.', $exception->getMessage());
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     public function testFailedCheckoutsDoNotReplayOrMutateTheSessionPurchase()
     {
         Event::fake([NewPurchase::class]);
@@ -187,5 +264,16 @@ class CheckoutPurchaseDouble extends Purchase
     {
         $this->exists = true;
         return true;
+    }
+}
+
+
+class CheckoutRecoveryRequestDouble extends MakePurchasesRequest
+{
+    public $committedPurchases = [];
+
+    protected function findCommittedPurchase($id)
+    {
+        return $this->committedPurchases[$id] ?? null;
     }
 }
