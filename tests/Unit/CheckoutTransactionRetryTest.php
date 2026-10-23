@@ -16,6 +16,35 @@ use Tests\TestCase;
 
 class CheckoutTransactionRetryTest extends TestCase
 {
+    public function testSuccessfulCheckoutClearsCartAndEmitsOneEvent()
+    {
+        Event::fake([NewPurchase::class]);
+        CheckoutPurchaseDouble::$startingStates = [];
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'successful-purchase-id';
+        $purchase->message = 'buyer message';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $reserved = [];
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldReceive('reservePurchase')->once()->andReturnUsing(function (Purchase $item) use (&$reserved) {
+            $reserved[] = $item;
+        });
+        DB::shouldReceive('transaction')->once()->andReturnUsing(function ($callback) {
+            return $callback();
+        });
+
+        (new MakePurchasesRequest())->persist($ledger);
+
+        $this->assertCount(1, $reserved);
+        $this->assertNotSame($purchase, $reserved[0]);
+        $this->assertFalse($purchase->exists);
+        $this->assertSame('buyer message', $purchase->message);
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertDispatched(NewPurchase::class, 1);
+    }
+
     public function testFailedCheckoutsDoNotReplayOrMutateTheSessionPurchase()
     {
         Event::fake([NewPurchase::class]);
