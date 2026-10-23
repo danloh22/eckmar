@@ -175,6 +175,48 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    public function testPostCommitSessionClearFailureRecoversWithoutRepeatingReservation()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Session store write failed after commit');
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'session-recovery-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->exists = true;
+        $committed->setRelation('buyer', (object) ['id' => 'buyer-id']);
+        $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
+        $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
+
+        $request = new SessionClearFailureRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldReceive('reservePurchase')->once()->andReturn(new \App\WalletEscrowHold());
+        DB::shouldReceive('transaction')->once()->andReturnUsing(function ($callback) {
+            return $callback();
+        });
+
+        $request->persist($ledger);
+
+        $this->assertSame(2, $request->clearAttempts);
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertDispatched(NewPurchase::class, 1);
+        Event::assertDispatched(NewPurchase::class, function (NewPurchase $event) use ($committed) {
+            return $event->purchase === $committed;
+        });
+    }
+
     public function testFailedCheckoutsDoNotReplayOrMutateTheSessionPurchase()
     {
         Event::fake([NewPurchase::class]);
@@ -275,5 +317,20 @@ class CheckoutRecoveryRequestDouble extends MakePurchasesRequest
     protected function findCommittedPurchase($id)
     {
         return $this->committedPurchases[$id] ?? null;
+    }
+}
+
+class SessionClearFailureRequestDouble extends CheckoutRecoveryRequestDouble
+{
+    public $clearAttempts = 0;
+
+    protected function clearCheckoutCart()
+    {
+        $this->clearAttempts++;
+        if ($this->clearAttempts === 1) {
+            throw new \RuntimeException('Session store write failed after commit');
+        }
+
+        parent::clearCheckoutCart();
     }
 }
