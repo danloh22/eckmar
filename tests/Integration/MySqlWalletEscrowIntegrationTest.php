@@ -231,19 +231,20 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $wallet = $service->walletFor($buyerId, 'stb');
         $service->book($wallet, 'deposit', '100000000', '0', 'deposit', null, 'atomic-reserve-fixture');
 
-        DB::unprepared(
-            "CREATE TRIGGER reject_escrow_hold BEFORE INSERT ON wallet_escrow_holds " .
-            "FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced hold insert failure'"
+        // Add a required test-only column that the model does not populate.
+        // The resulting insert failure needs no elevated MySQL privileges.
+        DB::statement(
+            'ALTER TABLE wallet_escrow_holds ADD COLUMN forced_failure VARCHAR(10) NOT NULL'
         );
         try {
             try {
                 $service->reservePurchase($purchase);
                 $this->fail('A failed escrow hold insert must abort the reservation.');
             } catch (\Illuminate\Database\QueryException $expected) {
-                $this->assertTrue(strpos($expected->getMessage(), 'forced hold insert failure') !== false);
+                $this->assertNotEmpty($expected->getMessage());
             }
         } finally {
-            DB::unprepared('DROP TRIGGER IF EXISTS reject_escrow_hold');
+            DB::statement('ALTER TABLE wallet_escrow_holds DROP COLUMN forced_failure');
         }
 
         $this->assertSame('100000000', (string) $wallet->fresh()->available_atomic);
