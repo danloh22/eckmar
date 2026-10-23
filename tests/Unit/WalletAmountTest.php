@@ -63,6 +63,7 @@ class WalletAmountTest extends TestCase
     {
         return [
             ['-1'],
+            [-1],
             ['1e-8'],
             [' 1.0'],
             [INF],
