@@ -30,7 +30,7 @@ class CheckoutTransactionRetryTest extends TestCase
         $ledger = Mockery::mock(WalletLedgerService::class);
         $ledger->shouldReceive('reservePurchase')->once()->andReturnUsing(function (Purchase $item) use (&$reserved) {
             $reserved[] = $item;
-            return new \\App\\WalletEscrowHold();
+            return new \App\WalletEscrowHold();
         });
         DB::shouldReceive('transaction')->once()->andReturnUsing(function ($callback) {
             return $callback();
