@@ -214,6 +214,45 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $this->assertSame(0, DB::table('wallets')->where('user_id', $sellerId)->count());
     }
 
+    public function testEscrowReserveRollsBackLedgerWhenHoldInsertFails()
+    {
+        $service = new WalletLedgerService();
+        $buyerId = '99999999-9999-4999-8999-999999999999';
+        $purchaseId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        DB::table('users')->insert(['id' => $buyerId]);
+        DB::table('purchases')->insert(['id' => $purchaseId, 'buyer_id' => $buyerId]);
+
+        $purchase = new Purchase();
+        $purchase->id = $purchaseId;
+        $purchase->buyer_id = $buyerId;
+        $purchase->coin_name = 'stb';
+        $purchase->to_pay = '1.00000000';
+
+        $wallet = $service->walletFor($buyerId, 'stb');
+        $service->book($wallet, 'deposit', '100000000', '0', 'deposit', null, 'atomic-reserve-fixture');
+
+        DB::unprepared(
+            "CREATE TRIGGER reject_escrow_hold BEFORE INSERT ON wallet_escrow_holds " .
+            "FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced hold insert failure'"
+        );
+        try {
+            try {
+                $service->reservePurchase($purchase);
+                $this->fail('A failed escrow hold insert must abort the reservation.');
+            } catch (\Illuminate\Database\QueryException $expected) {
+                $this->assertTrue(strpos($expected->getMessage(), 'forced hold insert failure') !== false);
+            }
+        } finally {
+            DB::unprepared('DROP TRIGGER IF EXISTS reject_escrow_hold');
+        }
+
+        $this->assertSame('100000000', (string) $wallet->fresh()->available_atomic);
+        $this->assertSame('0', (string) $wallet->fresh()->reserved_atomic);
+        $this->assertSame(1, DB::table('wallet_ledger_entries')->count());
+        $this->assertSame(0, DB::table('wallet_escrow_holds')->count());
+    }
+
+
     public function testLedgerDuplicateKeyDoesNotMutateBalanceAcrossSeparateMysqlConnections()
     {
         $service = new WalletLedgerService();
