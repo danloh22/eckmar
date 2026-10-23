@@ -214,6 +214,31 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $this->assertSame(0, DB::table('wallets')->where('user_id', $sellerId)->count());
     }
 
+    public function testLedgerDuplicateKeyDoesNotMutateBalanceAcrossSeparateMysqlConnections()
+    {
+        $service = new WalletLedgerService();
+        $wallet = $service->walletFor(null, 'stb');
+        $first = $service->book($wallet, 'admin_credit', '75', '0', 'test', null, 'cross-connection-once');
+
+        // A second independent database connection must observe the committed
+        // entry and must not apply the same credit again.
+        $connection = DB::connection('mysql');
+        $alternate = clone $connection;
+        $alternate->setReadPdo(null);
+        try {
+            $entry = $alternate->table('wallet_ledger_entries')
+                ->where('idempotency_key', 'cross-connection-once')->first();
+            $this->assertNotNull($entry);
+            $this->assertSame($first->id, $entry->id);
+            $second = $service->book($wallet, 'admin_credit', '75', '0', 'test', null, 'cross-connection-once');
+            $this->assertSame($first->id, $second->id);
+            $this->assertSame('75', (string) $wallet->fresh()->available_atomic);
+            $this->assertSame(1, DB::table('wallet_ledger_entries')->where('idempotency_key', 'cross-connection-once')->count());
+        } finally {
+            $alternate->disconnect();
+        }
+    }
+
     public function testLedgerRejectsOverdraftAndDuplicateKeys()
     {
         $service = new WalletLedgerService();
