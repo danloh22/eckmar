@@ -20,17 +20,19 @@ class WalletLedgerService
 
     public function reservePurchase(Purchase $purchase): WalletEscrowHold
     {
-        $amount = $this->coinToAtomic($purchase->to_pay, $purchase->coin_name);
-        $wallet = $this->walletFor($purchase->buyer_id, $purchase->coin_name);
+        return DB::transaction(function () use ($purchase) {
+            $amount = $this->coinToAtomic($purchase->to_pay, $purchase->coin_name);
+            $wallet = $this->walletFor($purchase->buyer_id, $purchase->coin_name);
 
-        $this->book($wallet, 'escrow_hold', '-' . $amount, $amount, 'purchase', $purchase->id, 'purchase-hold-' . $purchase->id, $purchase->buyer_id);
+            $this->book($wallet, 'escrow_hold', '-' . $amount, $amount, 'purchase', $purchase->id, 'purchase-hold-' . $purchase->id, $purchase->buyer_id);
 
-        return WalletEscrowHold::firstOrCreate(['purchase_id' => $purchase->id], [
-            'buyer_wallet_id' => $wallet->id,
-            'coin' => $purchase->coin_name,
-            'amount_atomic' => $amount,
-            'status' => 'active',
-        ]);
+            return WalletEscrowHold::firstOrCreate(['purchase_id' => $purchase->id], [
+                'buyer_wallet_id' => $wallet->id,
+                'coin' => $purchase->coin_name,
+                'amount_atomic' => $amount,
+                'status' => 'active',
+            ]);
+        });
     }
 
     public function releasePurchase(Purchase $purchase, User $recipient, string $type = 'escrow_release')

@@ -214,6 +214,46 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $this->assertSame(0, DB::table('wallets')->where('user_id', $sellerId)->count());
     }
 
+    public function testEscrowReserveRollsBackLedgerWhenHoldInsertFails()
+    {
+        $service = new WalletLedgerService();
+        $buyerId = '99999999-9999-4999-8999-999999999999';
+        $purchaseId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        DB::table('users')->insert(['id' => $buyerId]);
+        DB::table('purchases')->insert(['id' => $purchaseId, 'buyer_id' => $buyerId]);
+
+        $purchase = new Purchase();
+        $purchase->id = $purchaseId;
+        $purchase->buyer_id = $buyerId;
+        $purchase->coin_name = 'stb';
+        $purchase->to_pay = '1.00000000';
+
+        $wallet = $service->walletFor($buyerId, 'stb');
+        $service->book($wallet, 'deposit', '100000000', '0', 'deposit', null, 'atomic-reserve-fixture');
+
+        // Add a required test-only column that the model does not populate.
+        // The resulting insert failure needs no elevated MySQL privileges.
+        DB::statement(
+            'ALTER TABLE wallet_escrow_holds ADD COLUMN forced_failure VARCHAR(10) NOT NULL'
+        );
+        try {
+            try {
+                $service->reservePurchase($purchase);
+                $this->fail('A failed escrow hold insert must abort the reservation.');
+            } catch (\Illuminate\Database\QueryException $expected) {
+                $this->assertNotEmpty($expected->getMessage());
+            }
+        } finally {
+            DB::statement('ALTER TABLE wallet_escrow_holds DROP COLUMN forced_failure');
+        }
+
+        $this->assertSame('100000000', (string) $wallet->fresh()->available_atomic);
+        $this->assertSame('0', (string) $wallet->fresh()->reserved_atomic);
+        $this->assertSame(1, DB::table('wallet_ledger_entries')->count());
+        $this->assertSame(0, DB::table('wallet_escrow_holds')->count());
+    }
+
+
     public function testLedgerDuplicateKeyDoesNotMutateBalanceAcrossSeparateMysqlConnections()
     {
         $service = new WalletLedgerService();
