@@ -101,7 +101,7 @@ class CheckoutTransactionRetryTest extends TestCase
     public function testAmbiguousCommitRecoversMatchingPersistedPurchases()
     {
         Event::fake([NewPurchase::class]);
-        Log::shouldReceive('error')->once()->with('Lost connection after commit');
+        Log::shouldReceive('error')->once()->with('Duplicate entry for key purchases.PRIMARY');
 
         $purchase = new Purchase();
         $purchase->id = 'recoverable-purchase-id';
@@ -126,7 +126,7 @@ class CheckoutTransactionRetryTest extends TestCase
 
         $ledger = Mockery::mock(WalletLedgerService::class);
         $ledger->shouldNotReceive('reservePurchase');
-        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Lost connection after commit'));
+        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000));
 
         $request->persist($ledger);
 
@@ -139,7 +139,7 @@ class CheckoutTransactionRetryTest extends TestCase
     public function testAmbiguousCommitFailsClosedOnConflictingIdentity()
     {
         Event::fake([NewPurchase::class]);
-        Log::shouldReceive('error')->once()->with('Lost connection after commit');
+        Log::shouldReceive('error')->once()->with('Duplicate entry for key purchases.PRIMARY');
         Log::shouldReceive('error')->once()->with('Checkout status is inconsistent. Please contact support.');
 
         $purchase = new Purchase();
@@ -162,7 +162,7 @@ class CheckoutTransactionRetryTest extends TestCase
 
         $ledger = Mockery::mock(WalletLedgerService::class);
         $ledger->shouldNotReceive('reservePurchase');
-        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Lost connection after commit'));
+        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000));
 
         try {
             $request->persist($ledger);
