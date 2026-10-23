@@ -11,13 +11,7 @@ class ProductBoughtNotificationTest extends TestCase
 {
     public function testRecoveryReplayDoesNotSendPurchaseNotificationTwice()
     {
-        $purchase = new Purchase();
-        $purchase->id = 'replayed-purchase-id';
-        $purchase->setRelation('buyer', (object) ['username' => 'buyer']);
-        $purchase->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
-
-        $user = new PurchaseNotificationUserDouble();
-        $purchase->setRelation('vendor', (object) ['user' => $user]);
+        $purchase = $this->purchaseWithNotificationUser($user);
         $event = new NewPurchase($purchase);
         $listener = new ProductBoughtNotification();
 
@@ -37,10 +31,45 @@ class ProductBoughtNotificationTest extends TestCase
             ['route_params', serialize(['sale' => $purchase->id])],
         ], $user->notificationQuery->filters);
     }
+
+    public function testRecoveryReplayAfterPostPersistFailureDoesNotDuplicateNotification()
+    {
+        $purchase = $this->purchaseWithNotificationUser($user);
+        $event = new NewPurchase($purchase);
+        $listener = new ProductBoughtNotification();
+        $user->failAfterPersisting = true;
+
+        try {
+            $listener->handle($event);
+            $this->fail('Expected the post-persistence side effect to fail.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('post-persistence side effect failed', $exception->getMessage());
+        }
+
+        $user->failAfterPersisting = false;
+        $listener->handle($event);
+
+        $this->assertSame(1, $user->notificationsSent);
+        $this->assertTrue($user->notificationQuery->delivered);
+    }
+
+    private function purchaseWithNotificationUser(&$user)
+    {
+        $purchase = new Purchase();
+        $purchase->id = 'replayed-purchase-id';
+        $purchase->setRelation('buyer', (object) ['username' => 'buyer']);
+        $purchase->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
+
+        $user = new PurchaseNotificationUserDouble();
+        $purchase->setRelation('vendor', (object) ['user' => $user]);
+
+        return $purchase;
+    }
 }
 
 class PurchaseNotificationUserDouble
 {
+    public $failAfterPersisting = false;
     public $lastNotification = [];
     public $notificationQuery;
     public $notificationsSent = 0;
@@ -60,6 +89,10 @@ class PurchaseNotificationUserDouble
         $this->notificationsSent++;
         $this->lastNotification = [$content, $routeName, $routeParams];
         $this->notificationQuery->delivered = true;
+
+        if ($this->failAfterPersisting) {
+            throw new \RuntimeException('post-persistence side effect failed');
+        }
     }
 }
 
