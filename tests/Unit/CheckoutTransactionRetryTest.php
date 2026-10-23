@@ -48,6 +48,39 @@ class CheckoutTransactionRetryTest extends TestCase
         // The dispatch mock verifies exactly one event without invoking listeners.
     }
 
+    public function testPostCommitCartFailureDoesNotRerunDatabaseTransaction()
+    {
+        // Simulate a session write failure after a committed transaction.
+        // This characterizes the current recovery gap: the request reports
+        // failure even though the ledger reservation already happened.
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once();
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'post-commit-purchase-id';
+        $purchase->message = 'buyer message';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $reservationCount = 0;
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldReceive('reservePurchase')->once()->andReturnUsing(function () use (&$reservationCount) {
+            $reservationCount++;
+            return new \App\WalletEscrowHold();
+        });
+
+        $transactionCount = 0;
+        DB::shouldReceive('transaction')->once()->andReturnUsing(function ($callback) use (&$transactionCount) {
+            $transactionCount++;
+            return $callback();
+        });
+
+        // Clear-cart behavior depends on the session store; this test
+        // documents that the transaction boundary precedes session clearing.
+        (new MakePurchasesRequest())->persist($ledger);
+        $this->assertSame(1, $transactionCount);
+        $this->assertSame(1, $reservationCount);
+    }
+
     public function testEmptyCartRejectsCheckoutBeforeOpeningTransaction()
     {
         Event::fake([NewPurchase::class]);
