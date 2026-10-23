@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Exceptions\RequestException;
 use App\Services\WalletLedgerService;
 use App\Wallet;
 use App\WalletExchange;
@@ -18,6 +19,55 @@ class WalletAmountTest extends TestCase
         $this->assertSame('123456789', $service->coinToAtomic('1.23456789', 'btc'));
         $this->assertSame('1', $service->coinToAtomic('0.000000000001', 'xmr'));
         $this->assertSame('100000000', $service->coinToAtomic('1', 'ltc'));
+    }
+
+    public function testExactAmountsMayIncludeOnlyZeroesBeyondCoinPrecision()
+    {
+        $service = new WalletLedgerService();
+
+        $this->assertSame('123000000', $service->coinToAtomic('1.230000000', 'btc'));
+    }
+
+    /**
+     * @dataProvider lossyAmountProvider
+     */
+    public function testCoinAmountsRejectNonZeroDigitsBeyondSupportedPrecision($amount, $coin)
+    {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage('Amount exceeds the supported coin precision.');
+
+        (new WalletLedgerService())->coinToAtomic($amount, $coin);
+    }
+
+    public function lossyAmountProvider()
+    {
+        return [
+            ['1.000000009', 'btc'],
+            ['0.0000000000001', 'xmr'],
+            ['2.123456789', 'ltc'],
+        ];
+    }
+
+    /**
+     * @dataProvider invalidAmountProvider
+     */
+    public function testCoinAmountsRejectInvalidDecimalRepresentations($amount)
+    {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage('Amount must be a non-negative decimal value.');
+
+        (new WalletLedgerService())->coinToAtomic($amount, 'btc');
+    }
+
+    public function invalidAmountProvider()
+    {
+        return [
+            ['-1'],
+            ['1e-8'],
+            [' 1.0'],
+            [INF],
+            [NAN],
+        ];
     }
 
     public function testWalletBalancesAreFormattedUsingCoinPrecision()
