@@ -81,7 +81,7 @@ class WalletLedgerService
             throw new RequestException('Coin precision is not configured correctly.');
         }
 
-        if (is_int($amount)) {
+        if (is_int($amount) && $amount >= 0) {
             $normalized = (string) $amount;
         } elseif (is_float($amount) && is_finite($amount) && $amount >= 0) {
             // Floats have already lost their original decimal representation.
