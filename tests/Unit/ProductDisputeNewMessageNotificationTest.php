@@ -10,6 +10,20 @@ use Tests\TestCase;
 
 class ProductDisputeNewMessageNotificationTest extends TestCase
 {
+    public function testAdministratorDisputeMessageNotifiesBothParticipants()
+    {
+        $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
+        $administrator = new ProductDisputeNewMessageNotificationAdminDouble();
+        $administrator->id = 505;
+
+        (new ProductDisputeNewMessageNotification())->handle(
+            new ProductDisputeNewMessageSent($purchase, $administrator)
+        );
+
+        $this->assertSame(1, $buyer->notificationsSent);
+        $this->assertSame(1, $vendor->notificationsSent);
+    }
+
     public function testStaleVendorModelStillRoutesDisputeMessageByIdentifier()
     {
         $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
@@ -98,6 +112,14 @@ class ProductDisputeNewMessageNotificationTest extends TestCase
         ]);
 
         return $purchase;
+    }
+}
+
+class ProductDisputeNewMessageNotificationAdminDouble extends User
+{
+    public function isAdmin()
+    {
+        return true;
     }
 }
 
