@@ -319,11 +319,15 @@ class Purchase extends Model
      */
     public function isAllowed() : bool
     {
-        // return true for user and buyer
-        return auth() -> check() && // must be logged in
-            (  auth() -> user() == $this -> vendor -> user // user is vendor of the sale
-            || auth() -> user() == $this -> buyer // user is buyer of the sale
-            || auth() -> user() -> isAdmin() ); // user is admin
+        if (!auth() -> check()) {
+            return false;
+        }
+
+        $user = auth() -> user();
+
+        return $this -> hasSamePresentIdentifier($this -> vendor_id, $user -> id)
+            || $this -> hasSamePresentIdentifier($this -> buyer_id, $user -> id)
+            || $user -> isAdmin();
     }
 
     /**
@@ -333,11 +337,15 @@ class Purchase extends Model
      */
     public function isVendor(User $user = null) : bool
     {
-        // Compare id if the user is given
-        if(!is_null($user))
-            return $this -> vendor_id == $user -> id;
-        // otherwise check logged user
-        return auth() -> check() && auth() -> user() -> id == $this -> vendor_id;
+        if (is_null($user)) {
+            if (!auth() -> check()) {
+                return false;
+            }
+
+            $user = auth() -> user();
+        }
+
+        return $this -> hasSamePresentIdentifier($this -> vendor_id, $user -> id);
     }
 
     /**
@@ -347,11 +355,31 @@ class Purchase extends Model
      */
     public function isBuyer(User $user = null) : bool
     {
-        // if user is set than check if given user is buyer
-        if(!is_null($user))
-            return $this -> buyer == $user;
-        // otherwise check if logged user
-        return auth() -> check() && auth() -> user() == $this -> buyer;
+        if (is_null($user)) {
+            if (!auth() -> check()) {
+                return false;
+            }
+
+            $user = auth() -> user();
+        }
+
+        return $this -> hasSamePresentIdentifier($this -> buyer_id, $user -> id);
+    }
+
+    /**
+     * Compare model identifiers without relying on loaded relation state.
+     *
+     * @param mixed $left
+     * @param mixed $right
+     * @return bool
+     */
+    private function hasSamePresentIdentifier($left, $right) : bool
+    {
+        return is_scalar($left)
+            && is_scalar($right)
+            && (string) $left !== ''
+            && (string) $right !== ''
+            && (string) $left === (string) $right;
     }
 
     /**
