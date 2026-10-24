@@ -10,6 +10,21 @@ use Tests\TestCase;
 
 class ProductDisputeNewMessageNotificationTest extends TestCase
 {
+    public function testStaleVendorModelStillRoutesDisputeMessageByIdentifier()
+    {
+        $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
+        $staleVendor = new User();
+        $staleVendor->id = (string) $vendor->id;
+        $staleVendor->username = 'stale-vendor-state';
+
+        (new ProductDisputeNewMessageNotification())->handle(
+            new ProductDisputeNewMessageSent($purchase, $staleVendor)
+        );
+
+        $this->assertSame(1, $buyer->notificationsSent);
+        $this->assertSame(0, $vendor->notificationsSent);
+    }
+
     public function testRecoveryReplayDoesNotSendDisputeMessageNotificationTwice()
     {
         $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
@@ -70,8 +85,10 @@ class ProductDisputeNewMessageNotificationTest extends TestCase
         $purchase->id = 'dispute-message-purchase-id';
 
         $buyer = new ProductDisputeNewMessageNotificationUserDouble();
+        $buyer->id = 303;
         $buyer->username = 'buyer';
         $vendor = new ProductDisputeNewMessageNotificationUserDouble();
+        $vendor->id = 404;
         $vendor->username = 'vendor';
 
         $purchase->setRelation('buyer', $buyer);

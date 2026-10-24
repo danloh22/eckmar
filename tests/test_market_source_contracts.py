@@ -193,5 +193,24 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         )
         self.assertNotIn("isAdmin()", authorize_source)
 
+    def test_dispute_notification_routing_uses_present_scalar_identifiers(self):
+        listeners = (
+            "ProductDisputedNotification.php",
+            "ProductDisputeNewMessageNotification.php",
+        )
+
+        for listener in listeners:
+            with self.subTest(listener=listener):
+                source = (
+                    self.root / "app/Listeners/Purchase" / listener
+                ).read_text(encoding="utf-8")
+
+                self.assertEqual(3, source.count("samePresentUserIdentifier("))
+                self.assertIn("is_scalar($leftId) && is_scalar($rightId)", source)
+                self.assertIn("(string) $leftId !== ''", source)
+                self.assertIn("(string) $rightId !== ''", source)
+                self.assertIn("(string) $leftId === (string) $rightId", source)
+                self.assertNotRegex(source, r"\$event->initiator\s*==\s*\$event->")
+
 if __name__ == "__main__":
     unittest.main()

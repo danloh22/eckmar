@@ -26,7 +26,7 @@ class ProductDisputeNewMessageNotification
      */
     public function handle(ProductDisputeNewMessageSent $event)
     {
-        if ($event->initiator == $event->vendor->user){
+        if ($this->samePresentUserIdentifier($event->initiator, $event->vendor->user)){
             /**
              * Notify Buyer
              */
@@ -36,7 +36,7 @@ class ProductDisputeNewMessageNotification
             $this->notifyOnce($event->buyer, $content, $routeName, $routeParams);
         }
 
-        if ($event->initiator == $event->buyer){
+        if ($this->samePresentUserIdentifier($event->initiator, $event->buyer)){
             /**
              * Notify vendor
              */
@@ -45,6 +45,19 @@ class ProductDisputeNewMessageNotification
             $routeParams = serialize(['sale'=>$event->purchase->id]);
             $this->notifyOnce($event->vendor->user, $content, $routeName, $routeParams);
         }
+    }
+
+    /**
+     * Route notifications by persisted identity, not loaded model state.
+     */
+    private function samePresentUserIdentifier($left, $right)
+    {
+        $leftId = $left->id;
+        $rightId = $right->id;
+
+        return is_scalar($leftId) && is_scalar($rightId)
+            && (string) $leftId !== '' && (string) $rightId !== ''
+            && (string) $leftId === (string) $rightId;
     }
 
     /**
