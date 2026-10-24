@@ -64,6 +64,7 @@ class BitmessageNotifySerializationTest extends TestCase
 
         $this->assertSame(2, $job->tries);
         $this->assertSame(60, $job->timeout);
+        $this->assertSame(30, $job->retryDelay);
 
         foreach (config('queue.connections') as $name => $connection) {
             if (!isset($connection['retry_after'])) {
@@ -75,7 +76,40 @@ class BitmessageNotifySerializationTest extends TestCase
                 $connection['retry_after'],
                 $name.' retry_after must exceed the Bitmessage job timeout'
             );
+            $this->assertLessThan(
+                $connection['retry_after'],
+                $job->retryDelay,
+                $name.' retry delay must remain below retry_after'
+            );
         }
+    }
+
+    public function testFirstTransportFailureIsReleasedWithJobSpecificBackoff()
+    {
+        $job = new FailingBitmessageNotify(
+            'Notification from marketplace',
+            'A purchase was created',
+            'BM-recipient'
+        );
+        $job->testAttempts = 1;
+
+        $job->handle();
+
+        $this->assertSame(30, $job->releasedWith);
+    }
+
+    public function testFinalTransportFailureIsRethrownWithoutRelease()
+    {
+        $job = new FailingBitmessageNotify(
+            'Notification from marketplace',
+            'A purchase was created',
+            'BM-recipient'
+        );
+        $job->testAttempts = 2;
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('synthetic transport failure');
+        $job->handle();
     }
 
     public function testTerminalFailureAuditExcludesPrivateDeliveryDataAndExceptionMessage()
@@ -103,5 +137,27 @@ class BitmessageNotifySerializationTest extends TestCase
             );
 
         $job->failed(new RuntimeException('rpc-password-secret-marker'));
+    }
+}
+
+class FailingBitmessageNotify extends BitmessageNotify
+{
+    public $testAttempts = 1;
+
+    public $releasedWith;
+
+    public function attempts()
+    {
+        return $this->testAttempts;
+    }
+
+    public function release($delay = 0)
+    {
+        $this->releasedWith = $delay;
+    }
+
+    protected function sendNotification()
+    {
+        throw new RuntimeException('synthetic transport failure');
     }
 }
