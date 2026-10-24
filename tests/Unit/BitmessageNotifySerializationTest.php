@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Jobs\BitmessageNotify;
+use Illuminate\Contracts\Queue\Job as QueueJob;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use RuntimeException;
@@ -64,6 +65,7 @@ class BitmessageNotifySerializationTest extends TestCase
 
         $this->assertSame(2, $job->tries);
         $this->assertSame(60, $job->timeout);
+        $this->assertSame(30, $job->retryDelay);
 
         foreach (config('queue.connections') as $name => $connection) {
             if (!isset($connection['retry_after'])) {
@@ -75,7 +77,45 @@ class BitmessageNotifySerializationTest extends TestCase
                 $connection['retry_after'],
                 $name.' retry_after must exceed the Bitmessage job timeout'
             );
+            $this->assertLessThan(
+                $connection['retry_after'],
+                $job->retryDelay,
+                $name.' retry delay must remain below retry_after'
+            );
         }
+    }
+
+    public function testFirstTransportFailureIsReleasedWithJobSpecificBackoff()
+    {
+        $job = new FailingBitmessageNotify(
+            'Notification from marketplace',
+            'A purchase was created',
+            'BM-recipient'
+        );
+        $queueJob = Mockery::mock(QueueJob::class);
+        $queueJob->shouldReceive('attempts')->twice()->andReturn(1);
+        $queueJob->shouldReceive('release')->once()->with(30);
+
+        $job->setJob($queueJob);
+        $job->handle();
+    }
+
+    public function testFinalTransportFailureIsRethrownWithoutRelease()
+    {
+        $job = new FailingBitmessageNotify(
+            'Notification from marketplace',
+            'A purchase was created',
+            'BM-recipient'
+        );
+        $queueJob = Mockery::mock(QueueJob::class);
+        $queueJob->shouldReceive('attempts')->twice()->andReturn(2);
+        $queueJob->shouldNotReceive('release');
+
+        $job->setJob($queueJob);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('synthetic transport failure');
+        $job->handle();
     }
 
     public function testTerminalFailureAuditExcludesPrivateDeliveryDataAndExceptionMessage()
@@ -103,5 +143,13 @@ class BitmessageNotifySerializationTest extends TestCase
             );
 
         $job->failed(new RuntimeException('rpc-password-secret-marker'));
+    }
+}
+
+class FailingBitmessageNotify extends BitmessageNotify
+{
+    protected function sendNotification()
+    {
+        throw new RuntimeException('synthetic transport failure');
     }
 }
