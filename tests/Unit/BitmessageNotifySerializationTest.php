@@ -3,7 +3,6 @@
 namespace Tests\Unit;
 
 use App\Jobs\BitmessageNotify;
-use Illuminate\Contracts\Queue\Job as QueueJob;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use RuntimeException;
@@ -92,12 +91,11 @@ class BitmessageNotifySerializationTest extends TestCase
             'A purchase was created',
             'BM-recipient'
         );
-        $queueJob = Mockery::mock(QueueJob::class);
-        $queueJob->shouldReceive('attempts')->twice()->andReturn(1);
-        $queueJob->shouldReceive('release')->once()->with(30);
+        $job->testAttempts = 1;
 
-        $job->setJob($queueJob);
         $job->handle();
+
+        $this->assertSame(30, $job->releasedWith);
     }
 
     public function testFinalTransportFailureIsRethrownWithoutRelease()
@@ -107,11 +105,7 @@ class BitmessageNotifySerializationTest extends TestCase
             'A purchase was created',
             'BM-recipient'
         );
-        $queueJob = Mockery::mock(QueueJob::class);
-        $queueJob->shouldReceive('attempts')->twice()->andReturn(2);
-        $queueJob->shouldNotReceive('release');
-
-        $job->setJob($queueJob);
+        $job->testAttempts = 2;
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('synthetic transport failure');
@@ -148,6 +142,20 @@ class BitmessageNotifySerializationTest extends TestCase
 
 class FailingBitmessageNotify extends BitmessageNotify
 {
+    public $testAttempts = 1;
+
+    public $releasedWith;
+
+    public function attempts()
+    {
+        return $this->testAttempts;
+    }
+
+    public function release($delay = 0)
+    {
+        $this->releasedWith = $delay;
+    }
+
     protected function sendNotification()
     {
         throw new RuntimeException('synthetic transport failure');
