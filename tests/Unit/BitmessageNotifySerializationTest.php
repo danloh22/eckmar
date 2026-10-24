@@ -3,6 +3,9 @@
 namespace Tests\Unit;
 
 use App\Jobs\BitmessageNotify;
+use Illuminate\Support\Facades\Log;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class BitmessageNotifySerializationTest extends TestCase
@@ -50,6 +53,7 @@ class BitmessageNotifySerializationTest extends TestCase
         $this->assertTrue(strpos($payload, 'BM-recipient') !== false);
         $this->assertTrue(strpos($payload, 'BM-marketplace-sender') !== false);
     }
+
     public function testQueuedJobBoundsAttemptsAndRuntimeBelowQueueRetryWindows()
     {
         $job = new BitmessageNotify(
@@ -74,4 +78,30 @@ class BitmessageNotifySerializationTest extends TestCase
         }
     }
 
+    public function testTerminalFailureAuditExcludesPrivateDeliveryDataAndExceptionMessage()
+    {
+        $job = new BitmessageNotify(
+            'private-title-marker',
+            'private-content-marker',
+            'BM-private-recipient-marker'
+        );
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->with(
+                'Bitmessage notification job failed',
+                Mockery::on(function ($context) {
+                    $encoded = json_encode($context);
+
+                    return isset($context['exception_class'])
+                        && $context['exception_class'] === RuntimeException::class
+                        && strpos($encoded, 'private-title-marker') === false
+                        && strpos($encoded, 'private-content-marker') === false
+                        && strpos($encoded, 'BM-private-recipient-marker') === false
+                        && strpos($encoded, 'rpc-password-secret-marker') === false;
+                })
+            );
+
+        $job->failed(new RuntimeException('rpc-password-secret-marker'));
+    }
 }
