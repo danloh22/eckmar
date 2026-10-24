@@ -8,6 +8,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Support\Facades\Log;
 
 class BitmessageNotify implements ShouldQueue
 {
@@ -88,5 +89,19 @@ class BitmessageNotify implements ShouldQueue
             $this->delete();
         }
 
+    }
+
+    /**
+     * Report terminal failure without copying recipient, content, credentials,
+     * or an exception message into the application log.
+     *
+     * @param \Exception $exception
+     * @return void
+     */
+    public function failed(\Exception $exception)
+    {
+        Log::warning('Bitmessage notification job failed', [
+            'exception_class' => get_class($exception),
+        ]);
     }
 }
