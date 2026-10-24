@@ -212,5 +212,18 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
                 self.assertIn("(string) $leftId === (string) $rightId", source)
                 self.assertNotRegex(source, r"\$event->initiator\s*==\s*\$event->")
 
+    def test_admin_dispute_message_notifies_both_participants(self):
+        listener = (
+            self.root
+            / "app/Listeners/Purchase/ProductDisputeNewMessageNotification.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("$initiatedByAdmin = !$initiatedByVendor && !$initiatedByBuyer && $event->initiator->isAdmin()", listener)
+        self.assertIn("$initiatedByVendor || $initiatedByAdmin", listener)
+        self.assertIn("$initiatedByBuyer || $initiatedByAdmin", listener)
+        self.assertIn("testAdministratorDisputeMessageNotifiesBothParticipants", (
+            self.root / "tests/Unit/ProductDisputeNewMessageNotificationTest.php"
+        ).read_text(encoding="utf-8"))
+
 if __name__ == "__main__":
     unittest.main()
