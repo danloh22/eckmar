@@ -39,7 +39,13 @@ class NewItemRequest extends FormRequest
     public function persist(Product $product)
     {
         $shipping = null;
-        throw_if($product->user->id == auth()->user()->id, new RequestException('You can\'t put your products in cart!'));
+        $ownerId = $product->user_id;
+        $buyerId = auth()->id();
+        $isOwner = is_scalar($ownerId) && is_scalar($buyerId)
+            && (string) $ownerId !== '' && (string) $buyerId !== ''
+            && (string) $ownerId === (string) $buyerId;
+
+        throw_if($isOwner, new RequestException('You can\'t put your products in cart!'));
         // select shipping
         if($product -> isPhysical())
             $shipping = $product -> specificProduct() -> shippings()
