@@ -46,10 +46,11 @@ class BitmessageNotify implements ShouldQueue
     private $sender;
 
 
-    private $bitmessage;
-
     /**
      * Create a new job instance.
+     *
+     * Keep RPC credentials and the client itself out of the queued payload.
+     * Laravel serializes job properties between dispatch and execution.
      *
      * @return void
      */
@@ -59,12 +60,6 @@ class BitmessageNotify implements ShouldQueue
         $this->address = $address;
         $this->title = $title;
         $this->sender = config('bitmessage.marketplace_address');
-        $this->bitmessage = new Bitmessage(
-            config('bitmessage.connection.username'),
-            config('bitmessage.connection.password'),
-            config('bitmessage.connection.host'),
-            config('bitmessage.connection.port')
-        );
     }
 
     /**
@@ -75,7 +70,14 @@ class BitmessageNotify implements ShouldQueue
     public function handle()
     {
         if ($this->attempts() <= $this->tries){
-            $this->bitmessage->sendMessage($this->address,$this->sender,$this->title,$this->content);
+            $bitmessage = new Bitmessage(
+                config('bitmessage.connection.username'),
+                config('bitmessage.connection.password'),
+                config('bitmessage.connection.host'),
+                config('bitmessage.connection.port')
+            );
+
+            $bitmessage->sendMessage($this->address,$this->sender,$this->title,$this->content);
         } else {
             $this->delete();
         }
