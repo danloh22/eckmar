@@ -15,6 +15,12 @@ class BitmessageNotify implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
 
+    /**
+     * Bound each transport attempt below the 90-second queue retry window.
+     * This prevents a hung RPC call from occupying a worker indefinitely.
+     */
+    public $timeout = 60;
+
     public $tries = 2;
     /**
      * Content to send via bitmessage

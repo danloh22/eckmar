@@ -50,4 +50,28 @@ class BitmessageNotifySerializationTest extends TestCase
         $this->assertTrue(strpos($payload, 'BM-recipient') !== false);
         $this->assertTrue(strpos($payload, 'BM-marketplace-sender') !== false);
     }
+    public function testQueuedJobBoundsAttemptsAndRuntimeBelowQueueRetryWindows()
+    {
+        $job = new BitmessageNotify(
+            'Notification from marketplace',
+            'A purchase was created',
+            'BM-recipient'
+        );
+
+        $this->assertSame(2, $job->tries);
+        $this->assertSame(60, $job->timeout);
+
+        foreach (config('queue.connections') as $name => $connection) {
+            if (!isset($connection['retry_after'])) {
+                continue;
+            }
+
+            $this->assertGreaterThan(
+                $job->timeout,
+                $connection['retry_after'],
+                $name.' retry_after must exceed the Bitmessage job timeout'
+            );
+        }
+    }
+
 }
