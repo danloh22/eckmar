@@ -26,7 +26,11 @@ class ProductDisputeNewMessageNotification
      */
     public function handle(ProductDisputeNewMessageSent $event)
     {
-        if ($this->samePresentUserIdentifier($event->initiator, $event->vendor->user)){
+        $initiatedByVendor = $this->samePresentUserIdentifier($event->initiator, $event->vendor->user);
+        $initiatedByBuyer = $this->samePresentUserIdentifier($event->initiator, $event->buyer);
+        $initiatedByAdmin = !$initiatedByVendor && !$initiatedByBuyer && $event->initiator->isAdmin();
+
+        if ($initiatedByVendor || $initiatedByAdmin){
             /**
              * Notify Buyer
              */
@@ -36,7 +40,7 @@ class ProductDisputeNewMessageNotification
             $this->notifyOnce($event->buyer, $content, $routeName, $routeParams);
         }
 
-        if ($this->samePresentUserIdentifier($event->initiator, $event->buyer)){
+        if ($initiatedByBuyer || $initiatedByAdmin){
             /**
              * Notify vendor
              */
