@@ -23,6 +23,14 @@ class BitmessageNotify implements ShouldQueue
     public $timeout = 60;
 
     public $tries = 2;
+
+    /**
+     * Delay transient transport failures before the final attempt.
+     *
+     * Laravel 5.7 only applies the worker-wide --delay option automatically,
+     * so the job explicitly releases its first failed attempt.
+     */
+    public $retryDelay = 30;
     /**
      * Content to send via bitmessage
      *
@@ -76,19 +84,41 @@ class BitmessageNotify implements ShouldQueue
      */
     public function handle()
     {
-        if ($this->attempts() <= $this->tries){
-            $bitmessage = new Bitmessage(
-                config('bitmessage.connection.username'),
-                config('bitmessage.connection.password'),
-                config('bitmessage.connection.host'),
-                config('bitmessage.connection.port')
-            );
-
-            $bitmessage->sendMessage($this->address,$this->sender,$this->title,$this->content);
-        } else {
+        if ($this->attempts() > $this->tries) {
             $this->delete();
+
+            return;
         }
 
+        try {
+            $this->sendNotification();
+        } catch (\Exception $exception) {
+            if ($this->attempts() < $this->tries) {
+                $this->release($this->retryDelay);
+
+                return;
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Send the notification. Kept separate so retry behavior can be tested
+     * without constructing an RPC client or making a transport call.
+     *
+     * @return void
+     */
+    protected function sendNotification()
+    {
+        $bitmessage = new Bitmessage(
+            config('bitmessage.connection.username'),
+            config('bitmessage.connection.password'),
+            config('bitmessage.connection.host'),
+            config('bitmessage.connection.port')
+        );
+
+        $bitmessage->sendMessage($this->address, $this->sender, $this->title, $this->content);
     }
 
     /**
