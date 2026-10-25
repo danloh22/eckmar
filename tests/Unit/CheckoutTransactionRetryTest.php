@@ -217,6 +217,38 @@ class CheckoutTransactionRetryTest extends TestCase
         });
     }
 
+    /**
+     * @dataProvider duplicateIdentityDatabaseErrors
+     */
+    public function testDuplicateRecoveryOnlyAcceptsUniqueConstraintErrors(
+        $sqlState,
+        $driverCode,
+        $message,
+        $expected
+    ) {
+        $exception = new \PDOException($message, (int) $sqlState);
+        $exception->errorInfo = [$sqlState, $driverCode, $message];
+
+        $method = new \ReflectionMethod(MakePurchasesRequest::class, 'isDuplicateIdentityFailure');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            $expected,
+            $method->invoke(new MakePurchasesRequest(), $exception)
+        );
+    }
+
+    public function duplicateIdentityDatabaseErrors()
+    {
+        return [
+            'mysql duplicate' => ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY', true],
+            'postgres duplicate' => ['23505', 7, 'duplicate key value violates unique constraint', true],
+            'sqlite duplicate' => ['23000', 19, 'UNIQUE constraint failed: purchases.id', true],
+            'mysql foreign key' => ['23000', 1452, 'Cannot add or update a child row', false],
+            'mysql deadlock' => ['40001', 1213, 'Deadlock found when trying to get lock', false],
+        ];
+    }
+
     public function testFailedCheckoutsDoNotReplayOrMutateTheSessionPurchase()
     {
         Event::fake([NewPurchase::class]);
