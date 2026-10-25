@@ -10,12 +10,28 @@ use App\WalletEscrowHold;
 use App\WalletLedgerEntry;
 use App\MarketFeeWallet;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 
 class WalletLedgerService
 {
     public function walletFor($userId, string $coin): Wallet
     {
-        return Wallet::firstOrCreate(['user_id' => $userId, 'coin' => $coin], ['status' => 'active']);
+        $identity = ['user_id' => $userId, 'coin' => $coin];
+
+        try {
+            return Wallet::firstOrCreate($identity, ['status' => 'active']);
+        } catch (QueryException $exception) {
+            // firstOrCreate performs a read followed by an insert. Two first
+            // requests for the same user/coin can therefore race at the unique
+            // constraint. A locking read observes the winning committed row;
+            // unrelated persistence errors still propagate unchanged.
+            $wallet = Wallet::where($identity)->lockForUpdate()->first();
+            if ($wallet !== null) {
+                return $wallet;
+            }
+
+            throw $exception;
+        }
     }
 
     public function reservePurchase(Purchase $purchase): WalletEscrowHold
