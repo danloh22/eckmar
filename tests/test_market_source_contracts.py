@@ -92,6 +92,28 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("There is no offer for this quantity!", remove_offer_source)
         self.assertIn("You must have at least one offer!", remove_offer_source)
 
+    def test_offer_removal_validates_canonical_quantity_before_mutation(self):
+        start = self.controller_source.index("public function removeOffer")
+        end = self.controller_source.index("public function addDeliveryShow", start)
+        remove_offer_source = self.controller_source[start:end]
+
+        validation = "$validatedQuantity = filter_var($quantity, FILTER_VALIDATE_INT"
+        assignment = "$quantity = $validatedQuantity;"
+        persisted_query = "$offersToRemove = $product->offers()->where('min_quantity', $quantity);"
+        draft_mutation = "session() -> put('product_offers', $offers);"
+
+        for contract in (validation, assignment, persisted_query, draft_mutation):
+            self.assertIn(contract, remove_offer_source)
+        self.assertIn("'min_range' => 1", remove_offer_source)
+        self.assertIn("'max_range' => 2147483647", remove_offer_source)
+        self.assertIn(
+            "(string) $validatedQuantity !== (string) $quantity",
+            remove_offer_source,
+        )
+        self.assertLess(remove_offer_source.index(validation), remove_offer_source.index(assignment))
+        self.assertLess(remove_offer_source.index(assignment), remove_offer_source.index(persisted_query))
+        self.assertLess(remove_offer_source.index(assignment), remove_offer_source.index(draft_mutation))
+
     def test_empty_checkout_is_rejected_before_transaction(self):
         source = (
             self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
