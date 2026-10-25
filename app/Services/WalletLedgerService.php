@@ -21,6 +21,10 @@ class WalletLedgerService
         try {
             return Wallet::firstOrCreate($identity, ['status' => 'active']);
         } catch (QueryException $exception) {
+            if (!$this->isUniqueConstraintViolation($exception)) {
+                throw $exception;
+            }
+
             // firstOrCreate performs a read followed by an insert. Two first
             // requests for the same user/coin can therefore race at the unique
             // constraint. A locking read observes the winning committed row;
@@ -32,6 +36,19 @@ class WalletLedgerService
 
             throw $exception;
         }
+    }
+
+    private function isUniqueConstraintViolation(QueryException $exception): bool
+    {
+        $sqlState = (string) $exception->getCode();
+        $driverCode = isset($exception->errorInfo[1])
+            ? (string) $exception->errorInfo[1]
+            : '';
+        $message = strtolower($exception->getMessage());
+
+        return $sqlState === '23505'
+            || ($sqlState === '23000' && $driverCode === '1062')
+            || strpos($message, 'unique constraint failed') !== false;
     }
 
     public function reservePurchase(Purchase $purchase): WalletEscrowHold
