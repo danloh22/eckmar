@@ -174,12 +174,24 @@ class MakePurchasesRequest extends FormRequest
 
     protected function isDuplicateIdentityFailure(\Exception $exception)
     {
-        $code = (string) $exception->getCode();
-        $message = strtolower($exception->getMessage());
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            $errorInfo = property_exists($current, 'errorInfo') && is_array($current->errorInfo)
+                ? $current->errorInfo
+                : [];
+            $sqlState = isset($errorInfo[0]) ? (string) $errorInfo[0] : (string) $current->getCode();
+            $driverCode = isset($errorInfo[1]) ? (string) $errorInfo[1] : '';
+            $message = strtolower($current->getMessage());
 
-        return in_array($code, ['23000', '23505'], true)
-            || strpos($message, 'duplicate entry') !== false
-            || strpos($message, 'unique constraint failed') !== false;
+            if ($driverCode === '1062'
+                || $sqlState === '23505'
+                || strpos($message, 'duplicate entry') !== false
+                || strpos($message, 'unique constraint failed') !== false
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function sameCheckoutIdentity(Purchase $requested, Purchase $committed)
