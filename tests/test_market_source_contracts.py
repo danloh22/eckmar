@@ -247,6 +247,23 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             self.root / "tests/Unit/ProductDisputeNewMessageNotificationTest.php"
         ).read_text(encoding="utf-8"))
 
+    def test_checkout_recovery_rejects_unrelated_database_errors(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("protected function isDuplicateIdentityFailure(")
+        end = source.index("protected function sameCheckoutIdentity(", start)
+        classifier = source[start:end]
+
+        self.assertIn("$driverCode === '1062'", classifier)
+        self.assertIn("$sqlState === '23505'", classifier)
+        self.assertIn("'duplicate entry'", classifier)
+        self.assertIn("'unique constraint failed'", classifier)
+        self.assertNotIn("in_array($code, ['23000', '23505']", classifier)
+        self.assertIn("'mysql foreign key'", (
+            self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
+        ).read_text(encoding="utf-8"))
+
     def test_wallet_race_recovery_rejects_unrelated_database_errors(self):
         source = (
             self.root / "app/Services/WalletLedgerService.php"
