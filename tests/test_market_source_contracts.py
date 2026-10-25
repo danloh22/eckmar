@@ -247,5 +247,22 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             self.root / "tests/Unit/ProductDisputeNewMessageNotificationTest.php"
         ).read_text(encoding="utf-8"))
 
+    def test_wallet_race_recovery_rejects_unrelated_database_errors(self):
+        source = (
+            self.root / "app/Services/WalletLedgerService.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("public function walletFor(")
+        end = source.index("public function reservePurchase(", start)
+        wallet_for = source[start:end]
+
+        guard = "if (!$this->isUniqueConstraintViolation($exception))"
+        recovery = "$wallet = Wallet::where($identity)->lockForUpdate()->first();"
+        self.assertIn(guard, wallet_for)
+        self.assertIn(recovery, wallet_for)
+        self.assertLess(wallet_for.index(guard), wallet_for.index(recovery))
+        self.assertIn("$driverCode === '1062'", source)
+        self.assertIn("'23505'", source)
+        self.assertIn("'unique constraint failed'", source)
+
 if __name__ == "__main__":
     unittest.main()
