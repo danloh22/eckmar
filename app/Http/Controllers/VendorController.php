@@ -154,6 +154,14 @@ class VendorController extends Controller
         $this -> authorizeEditOrCreate($product);
 
         try{
+            $validatedQuantity = filter_var($quantity, FILTER_VALIDATE_INT, [
+                'options' => ['min_range' => 1, 'max_range' => 2147483647],
+            ]);
+            if ($validatedQuantity === false || (string) $validatedQuantity !== (string) $quantity) {
+                throw new RequestException('The offer quantity must be a canonical positive integer.');
+            }
+            $quantity = $validatedQuantity;
+
             // old offers on products
             if ($product && $product->exists) {
                 $offersToRemove = $product->offers()->where('min_quantity', $quantity);
