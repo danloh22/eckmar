@@ -295,6 +295,94 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return $payload;
     }
 
+    private function startWalletWorker($userId, $coin, $readyFile, $goFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_wallet_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $userId,
+            $coin,
+            $readyFile,
+            $goFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated wallet worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function collectWalletWorker(array $worker)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, $stderr);
+        $payload = json_decode(trim($stdout), true);
+        $this->assertTrue(is_array($payload), 'Wallet worker did not return JSON: ' . $stdout);
+        $this->assertArrayHasKey('wallet_id', $payload);
+
+        return $payload;
+    }
+
+    public function testConcurrentFirstWalletRequestsResolveToOneMysqlRow()
+    {
+        $userId = '12121212-1212-4121-8121-121212121212';
+        DB::table('users')->insert(['id' => $userId]);
+        $token = sys_get_temp_dir() . '/eckmar-wallet-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startWalletWorker($userId, 'stb', $readyOne, $goFile);
+            $workers[] = $this->startWalletWorker($userId, 'stb', $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $first = $this->collectWalletWorker($workers[0]);
+            $second = $this->collectWalletWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame($first['wallet_id'], $second['wallet_id']);
+            $this->assertSame(1, DB::table('wallets')
+                ->where('user_id', $userId)->where('coin', 'stb')->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
     public function testConcurrentProcessesApplySharedLedgerKeyOnlyOnce()
     {
         $service = new WalletLedgerService();
