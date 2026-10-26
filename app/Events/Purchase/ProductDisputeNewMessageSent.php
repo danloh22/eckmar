@@ -5,6 +5,7 @@ namespace App\Events\Purchase;
 use App\Purchase;
 use App\User;
 use Illuminate\Foundation\Events\Dispatchable;
+use Ramsey\Uuid\Uuid;
 
 class ProductDisputeNewMessageSent
 {
@@ -58,7 +59,7 @@ class ProductDisputeNewMessageSent
      *
      * @return void
      */
-    public function __construct(Purchase $purchase, User $user, string $messageId) {
+    public function __construct(Purchase $purchase, User $user, $messageId = null) {
 
         $this->buyer = $purchase->buyer;
         $this->vendor = $purchase->vendor;
@@ -66,6 +67,12 @@ class ProductDisputeNewMessageSent
         $this->purchase = $purchase;
 
         $this->initiator = $user;
-        $this->messageId = $messageId;
+        // Preserve the legacy two-argument constructor for internal callers.
+        // The production write path supplies the persisted message UUID;
+        // legacy callers receive a per-event identity rather than collapsing
+        // every later message on the purchase into one delivery.
+        $this->messageId = is_scalar($messageId) && (string) $messageId !== ''
+            ? (string) $messageId
+            : Uuid::uuid4()->toString();
     }
 }

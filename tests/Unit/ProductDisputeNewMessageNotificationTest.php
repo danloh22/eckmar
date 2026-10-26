@@ -10,6 +10,17 @@ use Tests\TestCase;
 
 class ProductDisputeNewMessageNotificationTest extends TestCase
 {
+    public function testLegacyEventConstructorAssignsPerEventDeliveryIdentity()
+    {
+        $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
+
+        $first = new ProductDisputeNewMessageSent($purchase, $vendor);
+        $second = new ProductDisputeNewMessageSent($purchase, $vendor);
+
+        $this->assertNotSame('', $first->messageId);
+        $this->assertNotSame($first->messageId, $second->messageId);
+    }
+
     public function testAdministratorDisputeMessageNotifiesBothParticipants()
     {
         $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
