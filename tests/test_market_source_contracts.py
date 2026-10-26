@@ -279,7 +279,11 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertLess(wallet_for.index(guard), wallet_for.index(recovery))
         self.assertIn("$driverCode === '1062'", source)
         self.assertIn("'23505'", source)
+        self.assertIn("$driverCode === '19'", source)
         self.assertIn("'unique constraint failed'", source)
+        self.assertIn("'misleading sqlite-like message'", (
+            self.root / "tests/Unit/WalletCreationRaceTest.php"
+        ).read_text(encoding="utf-8"))
 
 if __name__ == "__main__":
     unittest.main()
