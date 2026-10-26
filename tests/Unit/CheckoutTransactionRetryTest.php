@@ -126,7 +126,9 @@ class CheckoutTransactionRetryTest extends TestCase
 
         $ledger = Mockery::mock(WalletLedgerService::class);
         $ledger->shouldNotReceive('reservePurchase');
-        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000));
+        $duplicate = new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000);
+        $duplicate->errorInfo = ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY'];
+        DB::shouldReceive('transaction')->once()->andThrow($duplicate);
 
         $request->persist($ledger);
 
@@ -162,7 +164,9 @@ class CheckoutTransactionRetryTest extends TestCase
 
         $ledger = Mockery::mock(WalletLedgerService::class);
         $ledger->shouldNotReceive('reservePurchase');
-        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000));
+        $duplicate = new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000);
+        $duplicate->errorInfo = ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY'];
+        DB::shouldReceive('transaction')->once()->andThrow($duplicate);
 
         try {
             $request->persist($ledger);
@@ -244,6 +248,8 @@ class CheckoutTransactionRetryTest extends TestCase
             'mysql duplicate' => ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY', true],
             'postgres duplicate' => ['23505', 7, 'duplicate key value violates unique constraint', true],
             'sqlite duplicate' => ['23000', 19, 'UNIQUE constraint failed: purchases.id', true],
+            'deadlock with duplicate-like text' => ['40001', 1213, 'Deadlock after duplicate entry diagnostic', false],
+            'misleading sqlite-like message' => ['HY000', 5, 'unique constraint failed while handling I/O', false],
             'mysql foreign key' => ['23000', 1452, 'Cannot add or update a child row', false],
             'mysql deadlock' => ['40001', 1213, 'Deadlock found when trying to get lock', false],
         ];
