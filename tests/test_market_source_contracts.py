@@ -308,6 +308,32 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             self.root / "tests/Unit/ProductDisputeNewMessageNotificationTest.php"
         ).read_text(encoding="utf-8"))
 
+    def test_dispute_message_delivery_identity_uses_persisted_message_uuid(self):
+        dispute = (self.root / "app/Dispute.php").read_text(encoding="utf-8")
+        controller = (
+            self.root / "app/Http/Controllers/ProfileController.php"
+        ).read_text(encoding="utf-8")
+        event = (
+            self.root / "app/Events/Purchase/ProductDisputeNewMessageSent.php"
+        ).read_text(encoding="utf-8")
+        listener = (
+            self.root / "app/Listeners/Purchase/ProductDisputeNewMessageNotification.php"
+        ).read_text(encoding="utf-8")
+        unit_test = (
+            self.root / "tests/Unit/ProductDisputeNewMessageNotificationTest.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("return $newMessage;", dispute)
+        self.assertIn("$newMessage = $dispute -> newMessage", controller)
+        self.assertIn("$newMessage->id", controller)
+        self.assertIn("public $messageId;", event)
+        self.assertIn("string $messageId", event)
+        self.assertIn("'dispute-message-buyer:' . $event->messageId", listener)
+        self.assertIn("'dispute-message-vendor:' . $event->messageId", listener)
+        self.assertIn("->notifyOnce(", listener)
+        self.assertNotIn("->notifications()", listener)
+        self.assertIn("testDifferentMessagesOnSameDisputeEachNotifyOnce", unit_test)
+
     def test_checkout_recovery_rejects_unrelated_database_errors(self):
         source = (
             self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
@@ -415,6 +441,17 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("'purchase-delivered:' . $event->purchase->id", delivered)
         self.assertIn("$event->vendor->user->notifyOnce(", delivered)
         self.assertNotIn("->notifications()", delivered)
+
+    def test_canceled_notifications_use_atomic_per_recipient_delivery_identity(self):
+        listener = (
+            self.root / "app/Listeners/Purchase/PurchaseCanceledNotification.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("'purchase-canceled-vendor:' . $event->purchase->id", listener)
+        self.assertIn("$event->purchase->vendor->user->notifyOnce(", listener)
+        self.assertIn("'purchase-canceled-buyer:' . $event->purchase->id", listener)
+        self.assertIn("$event->purchase->buyer->notifyOnce(", listener)
+        self.assertNotIn("->notifications()", listener)
 
 if __name__ == "__main__":
     unittest.main()

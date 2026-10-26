@@ -78,6 +78,7 @@ class Dispute extends Model
         $newMessage -> setAuthor(auth() -> user());
         $newMessage -> save();
 
+        return $newMessage;
     }
 
     /**

@@ -47,11 +47,18 @@ class ProductDisputeNewMessageSent
     public $initiator;
 
     /**
+     * Stable UUID of the persisted dispute message.
+     *
+     * @var string
+     */
+    public $messageId;
+
+    /**
      * Create a new event instance.
      *
      * @return void
      */
-    public function __construct(Purchase $purchase,User $user) {
+    public function __construct(Purchase $purchase, User $user, string $messageId) {
 
         $this->buyer = $purchase->buyer;
         $this->vendor = $purchase->vendor;
@@ -59,5 +66,6 @@ class ProductDisputeNewMessageSent
         $this->purchase = $purchase;
 
         $this->initiator = $user;
+        $this->messageId = $messageId;
     }
 }

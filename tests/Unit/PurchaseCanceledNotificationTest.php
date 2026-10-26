@@ -22,25 +22,17 @@ class PurchaseCanceledNotificationTest extends TestCase
         $this->assertSame(1, $vendor->notificationsSent);
         $this->assertSame(1, $buyer->notificationsSent);
         $this->assertSame([
+            'purchase-canceled-vendor:' . $purchase->id,
             'Your sale has been canceled.',
             'profile.sales.single',
             serialize(['sale' => $purchase->id]),
         ], $vendor->lastNotification);
         $this->assertSame([
+            'purchase-canceled-buyer:' . $purchase->id,
             'Your purchase has been canceled.',
             'profile.purchases.single',
             serialize(['purchase' => $purchase->id]),
         ], $buyer->lastNotification);
-        $this->assertSame([
-            ['description', 'Your sale has been canceled.'],
-            ['route_name', 'profile.sales.single'],
-            ['route_params', serialize(['sale' => $purchase->id])],
-        ], $vendor->lastNotificationQuery->filters);
-        $this->assertSame([
-            ['description', 'Your purchase has been canceled.'],
-            ['route_name', 'profile.purchases.single'],
-            ['route_params', serialize(['purchase' => $purchase->id])],
-        ], $buyer->lastNotificationQuery->filters);
     }
 
     public function testRecoveryReplayAfterPostPersistFailureDoesNotDuplicateCanceledPurchaseNotification()
@@ -63,11 +55,13 @@ class PurchaseCanceledNotificationTest extends TestCase
         $this->assertSame(1, $vendor->notificationsSent);
         $this->assertSame(1, $buyer->notificationsSent);
         $this->assertSame([
+            'purchase-canceled-vendor:' . $purchase->id,
             'Your sale has been canceled.',
             'profile.sales.single',
             serialize(['sale' => $purchase->id]),
         ], $vendor->lastNotification);
         $this->assertSame([
+            'purchase-canceled-buyer:' . $purchase->id,
             'Your purchase has been canceled.',
             'profile.purchases.single',
             serialize(['purchase' => $purchase->id]),
@@ -95,68 +89,23 @@ class PurchaseCanceledNotificationUserDouble extends User
 {
     public $failAfterPersisting = false;
     public $lastNotification = [];
-    public $lastNotificationQuery;
     public $notificationsSent = 0;
     public $persistedNotifications = [];
 
-    public function notifications()
+    public function notifyOnce($deliveryKey, $content, $routeName = null, $routeParams = null)
     {
-        $this->lastNotificationQuery = new PurchaseCanceledNotificationQueryDouble($this);
+        if (array_key_exists($deliveryKey, $this->persistedNotifications)) {
+            return false;
+        }
 
-        return $this->lastNotificationQuery;
-    }
-
-    public function notify($content, $routeName = null, $routeParams = null)
-    {
         $this->notificationsSent++;
-        $this->lastNotification = [$content, $routeName, $routeParams];
-        $this->persistedNotifications[] = [
-            'description' => $content,
-            'route_name' => $routeName,
-            'route_params' => $routeParams,
-        ];
+        $this->lastNotification = [$deliveryKey, $content, $routeName, $routeParams];
+        $this->persistedNotifications[$deliveryKey] = true;
 
         if ($this->failAfterPersisting) {
             throw new \RuntimeException('post-persistence side effect failed');
         }
-    }
-}
 
-class PurchaseCanceledNotificationQueryDouble
-{
-    public $filters = [];
-    private $user;
-
-    public function __construct(PurchaseCanceledNotificationUserDouble $user)
-    {
-        $this->user = $user;
-    }
-
-    public function where($column, $value)
-    {
-        $this->filters[] = [$column, $value];
-
-        return $this;
-    }
-
-    public function exists()
-    {
-        foreach ($this->user->persistedNotifications as $notification) {
-            $matches = true;
-
-            foreach ($this->filters as $filter) {
-                if (!array_key_exists($filter[0], $notification)
-                    || $notification[$filter[0]] !== $filter[1]) {
-                    $matches = false;
-                    break;
-                }
-            }
-
-            if ($matches) {
-                return true;
-            }
-        }
-
-        return false;
+        return true;
     }
 }

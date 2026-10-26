@@ -17,7 +17,7 @@ class ProductDisputeNewMessageNotificationTest extends TestCase
         $administrator->id = 505;
 
         (new ProductDisputeNewMessageNotification())->handle(
-            new ProductDisputeNewMessageSent($purchase, $administrator)
+            new ProductDisputeNewMessageSent($purchase, $administrator, 'admin-message-id')
         );
 
         $this->assertSame(1, $buyer->notificationsSent);
@@ -32,7 +32,7 @@ class ProductDisputeNewMessageNotificationTest extends TestCase
         $staleVendor->username = 'stale-vendor-state';
 
         (new ProductDisputeNewMessageNotification())->handle(
-            new ProductDisputeNewMessageSent($purchase, $staleVendor)
+            new ProductDisputeNewMessageSent($purchase, $staleVendor, 'stale-vendor-message-id')
         );
 
         $this->assertSame(1, $buyer->notificationsSent);
@@ -42,7 +42,7 @@ class ProductDisputeNewMessageNotificationTest extends TestCase
     public function testRecoveryReplayDoesNotSendDisputeMessageNotificationTwice()
     {
         $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
-        $event = new ProductDisputeNewMessageSent($purchase, $vendor);
+        $event = new ProductDisputeNewMessageSent($purchase, $vendor, 'replayed-message-id');
         $listener = new ProductDisputeNewMessageNotification();
 
         $listener->handle($event);
@@ -51,21 +51,17 @@ class ProductDisputeNewMessageNotificationTest extends TestCase
         $this->assertSame(1, $buyer->notificationsSent);
         $this->assertSame(0, $vendor->notificationsSent);
         $this->assertSame([
+            'dispute-message-buyer:replayed-message-id',
             'There is new message on your disputed purchase',
             'profile.purchases.single',
             serialize(['purchase' => $purchase->id]),
         ], $buyer->lastNotification);
-        $this->assertSame([
-            ['description', 'There is new message on your disputed purchase'],
-            ['route_name', 'profile.purchases.single'],
-            ['route_params', serialize(['purchase' => $purchase->id])],
-        ], $buyer->lastNotificationQuery->filters);
     }
 
     public function testRecoveryReplayAfterPostPersistFailureDoesNotDuplicateDisputeMessageNotification()
     {
         $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
-        $event = new ProductDisputeNewMessageSent($purchase, $buyer);
+        $event = new ProductDisputeNewMessageSent($purchase, $buyer, 'persisted-message-id');
         $listener = new ProductDisputeNewMessageNotification();
         $vendor->failAfterPersisting = true;
 
@@ -82,15 +78,35 @@ class ProductDisputeNewMessageNotificationTest extends TestCase
         $this->assertSame(0, $buyer->notificationsSent);
         $this->assertSame(1, $vendor->notificationsSent);
         $this->assertSame([
+            'dispute-message-vendor:persisted-message-id',
             'There is new message on your disputed sale',
             'profile.sales.single',
             serialize(['sale' => $purchase->id]),
         ], $vendor->lastNotification);
+    }
+
+    public function testDifferentMessagesOnSameDisputeEachNotifyOnce()
+    {
+        $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
+        $listener = new ProductDisputeNewMessageNotification();
+
+        $listener->handle(new ProductDisputeNewMessageSent(
+            $purchase,
+            $vendor,
+            'first-message-id'
+        ));
+        $listener->handle(new ProductDisputeNewMessageSent(
+            $purchase,
+            $vendor,
+            'second-message-id'
+        ));
+
+        $this->assertSame(2, $buyer->notificationsSent);
+        $this->assertSame(0, $vendor->notificationsSent);
         $this->assertSame([
-            ['description', 'There is new message on your disputed sale'],
-            ['route_name', 'profile.sales.single'],
-            ['route_params', serialize(['sale' => $purchase->id])],
-        ], $vendor->lastNotificationQuery->filters);
+            'dispute-message-buyer:first-message-id',
+            'dispute-message-buyer:second-message-id',
+        ], array_keys($buyer->persistedNotifications));
     }
 
     private function purchaseWithNotificationUsers(&$buyer, &$vendor)
@@ -127,68 +143,23 @@ class ProductDisputeNewMessageNotificationUserDouble extends User
 {
     public $failAfterPersisting = false;
     public $lastNotification = [];
-    public $lastNotificationQuery;
     public $notificationsSent = 0;
     public $persistedNotifications = [];
 
-    public function notifications()
+    public function notifyOnce($deliveryKey, $content, $routeName = null, $routeParams = null)
     {
-        $this->lastNotificationQuery = new ProductDisputeNewMessageNotificationQueryDouble($this);
+        if (array_key_exists($deliveryKey, $this->persistedNotifications)) {
+            return false;
+        }
 
-        return $this->lastNotificationQuery;
-    }
-
-    public function notify($content, $routeName = null, $routeParams = null)
-    {
         $this->notificationsSent++;
-        $this->lastNotification = [$content, $routeName, $routeParams];
-        $this->persistedNotifications[] = [
-            'description' => $content,
-            'route_name' => $routeName,
-            'route_params' => $routeParams,
-        ];
+        $this->lastNotification = [$deliveryKey, $content, $routeName, $routeParams];
+        $this->persistedNotifications[$deliveryKey] = true;
 
         if ($this->failAfterPersisting) {
             throw new \RuntimeException('post-persistence side effect failed');
         }
-    }
-}
 
-class ProductDisputeNewMessageNotificationQueryDouble
-{
-    public $filters = [];
-    private $user;
-
-    public function __construct(ProductDisputeNewMessageNotificationUserDouble $user)
-    {
-        $this->user = $user;
-    }
-
-    public function where($column, $value)
-    {
-        $this->filters[] = [$column, $value];
-
-        return $this;
-    }
-
-    public function exists()
-    {
-        foreach ($this->user->persistedNotifications as $notification) {
-            $matches = true;
-
-            foreach ($this->filters as $filter) {
-                if (!array_key_exists($filter[0], $notification)
-                    || $notification[$filter[0]] !== $filter[1]) {
-                    $matches = false;
-                    break;
-                }
-            }
-
-            if ($matches) {
-                return true;
-            }
-        }
-
-        return false;
+        return true;
     }
 }
