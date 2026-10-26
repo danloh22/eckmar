@@ -255,14 +255,18 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         end = source.index("protected function sameCheckoutIdentity(", start)
         classifier = source[start:end]
 
-        self.assertIn("$driverCode === '1062'", classifier)
+        self.assertIn("$sqlState === '23000' && $driverCode === '1062'", classifier)
         self.assertIn("$sqlState === '23505'", classifier)
-        self.assertIn("'duplicate entry'", classifier)
+        self.assertIn("$driverCode === '19'", classifier)
         self.assertIn("'unique constraint failed'", classifier)
+        self.assertNotIn("strpos($message, 'duplicate entry')", classifier)
         self.assertNotIn("in_array($code, ['23000', '23505']", classifier)
-        self.assertIn("'mysql foreign key'", (
+        checkout_tests = (
             self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
-        ).read_text(encoding="utf-8"))
+        ).read_text(encoding="utf-8")
+        self.assertIn("'mysql foreign key'", checkout_tests)
+        self.assertIn("'deadlock with duplicate-like text'", checkout_tests)
+        self.assertIn("'misleading sqlite-like message'", checkout_tests)
 
     def test_wallet_race_recovery_rejects_unrelated_database_errors(self):
         source = (
