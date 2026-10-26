@@ -82,7 +82,10 @@ class MakePurchasesRequest extends FormRequest
             // after a duplicate-key signal that can represent a prior request
             // committing the same stable purchase UUIDs. Deadlocks and other
             // definite pre-commit failures retain the normal error path.
-            if (!$transactionCompleted && !$this->isDuplicateIdentityFailure($e)) {
+            if (!$transactionCompleted
+                && !$this->isDuplicateIdentityFailure($e)
+                && !$this->isAmbiguousCommitFailure($e)
+            ) {
                 throw new RequestException('Error happened! Try again later!');
             }
 
@@ -187,6 +190,32 @@ class MakePurchasesRequest extends FormRequest
                 || ($sqlState === '23000'
                     && $driverCode === '19'
                     && strpos($message, 'unique constraint failed') !== false)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine whether the database may have disconnected while COMMIT was in flight.
+     *
+     * Recovery remains read-only: it never replays the transaction. A disconnect can
+     * also happen before commit, in which case no matching rows are found and checkout
+     * fails normally. Partial or conflicting rows still fail closed.
+     */
+    protected function isAmbiguousCommitFailure(\Exception $exception)
+    {
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            $errorInfo = property_exists($current, 'errorInfo') && is_array($current->errorInfo)
+                ? $current->errorInfo
+                : [];
+            $sqlState = isset($errorInfo[0]) ? (string) $errorInfo[0] : (string) $current->getCode();
+            $driverCode = isset($errorInfo[1]) ? (string) $errorInfo[1] : '';
+
+            if (strpos($sqlState, '08') === 0
+                || ($sqlState === 'HY000' && in_array($driverCode, ['2006', '2013'], true))
             ) {
                 return true;
             }
