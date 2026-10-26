@@ -138,6 +138,110 @@ class CheckoutTransactionRetryTest extends TestCase
         });
     }
 
+    /**
+     * @dataProvider ambiguousCommitDatabaseErrors
+     */
+    public function testAmbiguousCommitClassifierAcceptsOnlyConnectionLosses(
+        $sqlState,
+        $driverCode,
+        $expected
+    ) {
+        $exception = new \PDOException('database connection outcome', 0);
+        $exception->errorInfo = [$sqlState, $driverCode, 'database connection outcome'];
+
+        $method = new \ReflectionMethod(MakePurchasesRequest::class, 'isAmbiguousCommitFailure');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            $expected,
+            $method->invoke(new MakePurchasesRequest(), $exception)
+        );
+    }
+
+    public function ambiguousCommitDatabaseErrors()
+    {
+        return [
+            'standard connection failure' => ['08006', 7, true],
+            'mysql server gone away' => ['HY000', 2006, true],
+            'mysql lost connection' => ['HY000', 2013, true],
+            'mysql deadlock' => ['40001', 1213, false],
+            'mysql lock timeout' => ['HY000', 1205, false],
+            'mysql generic error' => ['HY000', 1105, false],
+        ];
+    }
+
+    public function testAmbiguousDisconnectRecoversCommittedPurchasesWithoutReplay()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Lost connection during COMMIT');
+
+        $purchase = new Purchase();
+        $purchase->id = 'disconnect-recovery-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->exists = true;
+
+        $request = new CheckoutRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        $disconnect = new \PDOException('Lost connection during COMMIT', 0);
+        $disconnect->errorInfo = ['HY000', 2013, 'Lost connection during COMMIT'];
+        DB::shouldReceive('transaction')->once()->andThrow($disconnect);
+
+        $request->persist($ledger);
+
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertDispatched(NewPurchase::class, 1);
+        Event::assertDispatched(NewPurchase::class, function (NewPurchase $event) use ($committed) {
+            return $event->purchase === $committed;
+        });
+    }
+
+    public function testAmbiguousDisconnectWithoutCommittedRowsFailsWithoutReplay()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Lost connection before COMMIT');
+
+        $purchase = new Purchase();
+        $purchase->id = 'uncommitted-disconnect-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->quantity = 1;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $request = new CheckoutRecoveryRequestDouble();
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        $disconnect = new \PDOException('Lost connection before COMMIT', 0);
+        $disconnect->errorInfo = ['08006', 7, 'Lost connection before COMMIT'];
+        DB::shouldReceive('transaction')->once()->andThrow($disconnect);
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Uncommitted ambiguous checkout must fail without replay.');
+        } catch (RequestException $exception) {
+            $this->assertSame('Error happened! Try again later!', $exception->getMessage());
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     public function testAmbiguousCommitFailsClosedOnConflictingIdentity()
     {
         Event::fake([NewPurchase::class]);
