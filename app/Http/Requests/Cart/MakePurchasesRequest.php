@@ -182,10 +182,11 @@ class MakePurchasesRequest extends FormRequest
             $driverCode = isset($errorInfo[1]) ? (string) $errorInfo[1] : '';
             $message = strtolower($current->getMessage());
 
-            if ($driverCode === '1062'
+            if (($sqlState === '23000' && $driverCode === '1062')
                 || $sqlState === '23505'
-                || strpos($message, 'duplicate entry') !== false
-                || strpos($message, 'unique constraint failed') !== false
+                || ($sqlState === '23000'
+                    && $driverCode === '19'
+                    && strpos($message, 'unique constraint failed') !== false)
             ) {
                 return true;
             }
