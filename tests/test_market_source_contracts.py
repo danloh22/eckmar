@@ -117,6 +117,16 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("NewOfferRequest::create", offer_worker)
         self.assertIn("$request->persist(Product::findOrFail($productId));", offer_worker)
 
+        removal_worker = (
+            self.root / "tests/Integration/fixtures/mysql_offer_removal_worker.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "testConcurrentPersistedOfferRemovalsKeepOneActiveTier", mysql_test
+        )
+        self.assertIn("['kept', 'removed']", mysql_test)
+        self.assertIn("$controller->removeOffer(", removal_worker)
+        self.assertIn("Product::findOrFail($productId)", removal_worker)
+
     def test_persisted_offer_removal_validates_target_and_remaining_tier(self):
         start = self.controller_source.index("public function removeOffer")
         end = self.controller_source.index("public function addDeliveryShow", start)
