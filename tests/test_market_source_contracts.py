@@ -329,6 +329,32 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("'deadlock with duplicate-like text'", checkout_tests)
         self.assertIn("'misleading sqlite-like message'", checkout_tests)
 
+    def test_checkout_ambiguous_commit_recovery_is_read_only_and_fail_closed(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        persist_start = source.index("public function persist(")
+        persist_end = source.index("protected function clearCheckoutCart(", persist_start)
+        persist = source[persist_start:persist_end]
+        classifier_start = source.index("protected function isAmbiguousCommitFailure(")
+        classifier_end = source.index("protected function sameCheckoutIdentity(", classifier_start)
+        classifier = source[classifier_start:classifier_end]
+
+        self.assertIn("!$this->isAmbiguousCommitFailure($e)", persist)
+        self.assertIn("$recovered = $this->recoverCommittedCheckout($items);", persist)
+        self.assertNotIn("DB::transaction(", classifier)
+        self.assertIn("strpos($sqlState, '08') === 0", classifier)
+        self.assertIn("$sqlState === 'HY000'", classifier)
+        self.assertIn("['2006', '2013']", classifier)
+
+        checkout_tests = (
+            self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn("testAmbiguousDisconnectRecoversCommittedPurchasesWithoutReplay", checkout_tests)
+        self.assertIn("testAmbiguousDisconnectWithoutCommittedRowsFailsWithoutReplay", checkout_tests)
+        self.assertIn("'mysql deadlock' => ['40001', 1213, false]", checkout_tests)
+        self.assertIn("'mysql lock timeout' => ['HY000', 1205, false]", checkout_tests)
+
     def test_wallet_race_recovery_rejects_unrelated_database_errors(self):
         source = (
             self.root / "app/Services/WalletLedgerService.php"
