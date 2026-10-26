@@ -3,6 +3,8 @@
 namespace Tests\Integration;
 
 use App\MarketFeeWallet;
+use App\Offer;
+use App\Product;
 use App\Purchase;
 use App\Services\WalletLedgerService;
 use App\User;
@@ -43,6 +45,8 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
     protected function tearDown()
     {
         if (getenv('ECKMAR_DISPOSABLE_MYSQL') === 'yes') {
+            Schema::dropIfExists('offers');
+            Schema::dropIfExists('products');
             Schema::dropIfExists('wallet_escrow_holds');
             Schema::dropIfExists('wallet_ledger_entries');
             Schema::dropIfExists('market_fee_wallets');
@@ -57,6 +61,18 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
     {
         Schema::create('users', function (Blueprint $t) {
             $t->uuid('id')->primary();
+            $t->timestamps();
+        });
+        Schema::create('products', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+            $t->timestamps();
+        });
+        Schema::create('offers', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+            $t->uuid('product_id');
+            $t->integer('min_quantity');
+            $t->decimal('price', 16, 2);
+            $t->boolean('deleted')->default(false);
             $t->timestamps();
         });
         Schema::create('purchases', function (Blueprint $t) {
@@ -335,6 +351,99 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $this->assertArrayHasKey('wallet_id', $payload);
 
         return $payload;
+    }
+
+    private function startOfferWorker($productId, $price, $readyFile, $goFile, $minQuantity)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_offer_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $productId,
+            $price,
+            $readyFile,
+            $goFile,
+            $minQuantity,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated offer worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function collectOfferWorker(array $worker)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, $stderr);
+        $payload = json_decode(trim($stdout), true);
+        $this->assertTrue(is_array($payload), 'Offer worker did not return JSON: ' . $stdout);
+        $this->assertArrayHasKey('status', $payload);
+
+        return $payload;
+    }
+
+    public function testConcurrentPersistedOfferRequestsCreateOneActiveTier()
+    {
+        $productId = '13131313-1313-4131-8131-131313131313';
+        DB::table('products')->insert(['id' => $productId]);
+        $token = sys_get_temp_dir() . '/eckmar-offer-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startOfferWorker($productId, '10.00', $readyOne, $goFile, '2');
+            $workers[] = $this->startOfferWorker($productId, '11.00', $readyTwo, $goFile, '2');
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $first = $this->collectOfferWorker($workers[0]);
+            $second = $this->collectOfferWorker($workers[1]);
+            $workers = [];
+
+            $statuses = [$first['status'], $second['status']];
+            sort($statuses);
+            $this->assertSame(['created', 'duplicate'], $statuses);
+            $this->assertSame(1, Offer::where('product_id', $productId)
+                ->where('min_quantity', 2)
+                ->where('deleted', false)
+                ->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
     }
 
     public function testConcurrentFirstWalletRequestsResolveToOneMysqlRow()
