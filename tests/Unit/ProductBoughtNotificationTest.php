@@ -20,16 +20,11 @@ class ProductBoughtNotificationTest extends TestCase
 
         $this->assertSame(1, $user->notificationsSent);
         $this->assertSame([
+            'purchase-bought:' . $purchase->id,
             'Your product has been purchased by [buyer]',
             'profile.sales.single',
             serialize(['sale' => $purchase->id]),
         ], $user->lastNotification);
-        $this->assertSame([
-            ['route_name', 'profile.sales.single'],
-            ['route_params', serialize(['sale' => $purchase->id])],
-            ['route_name', 'profile.sales.single'],
-            ['route_params', serialize(['sale' => $purchase->id])],
-        ], $user->notificationQuery->filters);
     }
 
     public function testRecoveryReplayAfterPostPersistFailureDoesNotDuplicateNotification()
@@ -50,7 +45,7 @@ class ProductBoughtNotificationTest extends TestCase
         $listener->handle($event);
 
         $this->assertSame(1, $user->notificationsSent);
-        $this->assertTrue($user->notificationQuery->delivered);
+        $this->assertArrayHasKey('purchase-bought:' . $purchase->id, $user->deliveredKeys);
     }
 
     private function purchaseWithNotificationUser(&$user)
@@ -71,45 +66,28 @@ class PurchaseNotificationUserDouble
 {
     public $failAfterPersisting = false;
     public $lastNotification = [];
-    public $notificationQuery;
     public $notificationsSent = 0;
+    public $deliveredKeys = [];
 
     public function __construct()
     {
-        $this->notificationQuery = new PurchaseNotificationQueryDouble();
+        // no-op
     }
 
-    public function notifications()
+    public function notifyOnce($deliveryKey, $content, $routeName, $routeParams)
     {
-        return $this->notificationQuery;
-    }
+        if (isset($this->deliveredKeys[$deliveryKey])) {
+            return false;
+        }
 
-    public function notify($content, $routeName, $routeParams)
-    {
+        $this->deliveredKeys[$deliveryKey] = true;
         $this->notificationsSent++;
-        $this->lastNotification = [$content, $routeName, $routeParams];
-        $this->notificationQuery->delivered = true;
+        $this->lastNotification = [$deliveryKey, $content, $routeName, $routeParams];
 
         if ($this->failAfterPersisting) {
             throw new \RuntimeException('post-persistence side effect failed');
         }
-    }
-}
 
-class PurchaseNotificationQueryDouble
-{
-    public $delivered = false;
-    public $filters = [];
-
-    public function where($column, $value)
-    {
-        $this->filters[] = [$column, $value];
-
-        return $this;
-    }
-
-    public function exists()
-    {
-        return $this->delivered;
+        return true;
     }
 }

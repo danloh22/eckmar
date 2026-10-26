@@ -45,6 +45,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
     protected function tearDown()
     {
         if (getenv('ECKMAR_DISPOSABLE_MYSQL') === 'yes') {
+            Schema::dropIfExists('notifications');
             Schema::dropIfExists('offers');
             Schema::dropIfExists('products');
             Schema::dropIfExists('wallet_escrow_holds');
@@ -61,6 +62,15 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
     {
         Schema::create('users', function (Blueprint $t) {
             $t->uuid('id')->primary();
+            $t->timestamps();
+        });
+        Schema::create('notifications', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+            $t->uuid('user_id');
+            $t->mediumText('description');
+            $t->boolean('read')->default(false);
+            $t->text('route_name')->nullable();
+            $t->mediumText('route_params')->nullable();
             $t->timestamps();
         });
         Schema::create('products', function (Blueprint $t) {
@@ -353,6 +363,48 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return $payload;
     }
 
+    private function startNotificationWorker($userId, $deliveryKey, $readyFile, $goFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_notification_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $userId,
+            $deliveryKey,
+            $readyFile,
+            $goFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated notification worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function collectNotificationWorker(array $worker)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, $stderr);
+        $payload = json_decode(trim($stdout), true);
+        $this->assertTrue(is_array($payload), 'Notification worker did not return JSON: ' . $stdout);
+        $this->assertArrayHasKey('created', $payload);
+
+        return $payload;
+    }
+
     private function startOfferWorker($productId, $price, $readyFile, $goFile, $minQuantity)
     {
         $worker = base_path('tests/Integration/fixtures/mysql_offer_worker.php');
@@ -565,6 +617,57 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             $this->assertSame($first['wallet_id'], $second['wallet_id']);
             $this->assertSame(1, DB::table('wallets')
                 ->where('user_id', $userId)->where('coin', 'stb')->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
+    public function testConcurrentNotificationReplayPersistsOneDelivery()
+    {
+        $userId = '17171717-1717-4171-8171-171717171717';
+        $deliveryKey = 'purchase-bought:18181818-1818-4181-8181-181818181818';
+        DB::table('users')->insert(['id' => $userId]);
+        $token = sys_get_temp_dir() . '/eckmar-notification-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startNotificationWorker($userId, $deliveryKey, $readyOne, $goFile);
+            $workers[] = $this->startNotificationWorker($userId, $deliveryKey, $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $first = $this->collectNotificationWorker($workers[0]);
+            $second = $this->collectNotificationWorker($workers[1]);
+            $workers = [];
+
+            $created = [$first['created'], $second['created']];
+            sort($created);
+            $this->assertSame([false, true], $created);
+            $this->assertSame(1, DB::table('notifications')
+                ->where('user_id', $userId)
+                ->where('route_name', 'profile.sales.single')
+                ->count());
         } finally {
             foreach ($workers as $worker) {
                 if (is_resource($worker[0])) {

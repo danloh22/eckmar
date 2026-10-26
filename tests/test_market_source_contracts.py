@@ -376,5 +376,29 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             self.root / "tests/Unit/WalletCreationRaceTest.php"
         ).read_text(encoding="utf-8"))
 
+    def test_purchase_notification_replay_uses_deterministic_delivery_identity(self):
+        trait = (self.root / "app/Traits/Notifiable.php").read_text(
+            encoding="utf-8"
+        )
+        listener = (
+            self.root / "app/Listeners/Purchase/ProductBoughtNotification.php"
+        ).read_text(encoding="utf-8")
+        mysql_test = (
+            self.root / "tests/Integration/MySqlWalletEscrowIntegrationTest.php"
+        ).read_text(encoding="utf-8")
+        unit_test = (
+            self.root / "tests/Unit/NotificationIdempotencyTest.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Uuid::uuid5(", trait)
+        self.assertIn("$this->notifications()->save($notification);", trait)
+        self.assertIn("Notification::find($notificationId)", trait)
+        self.assertIn("notifications_pkey", trait)
+        self.assertIn("unique constraint failed: notifications.id", trait)
+        self.assertIn("->notifyOnce(", listener)
+        self.assertIn("'purchase-bought:' . $event->purchase->id", listener)
+        self.assertIn("testConcurrentNotificationReplayPersistsOneDelivery", mysql_test)
+        self.assertIn("mysql unrelated unique key", unit_test)
+
 if __name__ == "__main__":
     unittest.main()
