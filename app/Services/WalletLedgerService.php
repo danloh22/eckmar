@@ -48,7 +48,9 @@ class WalletLedgerService
 
         return $sqlState === '23505'
             || ($sqlState === '23000' && $driverCode === '1062')
-            || strpos($message, 'unique constraint failed') !== false;
+            || ($sqlState === '23000'
+                && $driverCode === '19'
+                && strpos($message, 'unique constraint failed') !== false);
     }
 
     public function reservePurchase(Purchase $purchase): WalletEscrowHold
