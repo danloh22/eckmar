@@ -32,6 +32,7 @@ class WalletCreationRaceTest extends TestCase
             'mysql duplicate' => ['23000', 1062, 'Duplicate entry for key wallets_user_id_coin_unique', true],
             'postgres duplicate' => ['23505', 7, 'duplicate key value violates unique constraint', true],
             'sqlite duplicate' => ['23000', 19, 'UNIQUE constraint failed: wallets.user_id, wallets.coin', true],
+            'misleading sqlite-like message' => ['HY000', 5, 'unique constraint failed while handling I/O', false],
             'mysql foreign key' => ['23000', 1452, 'Cannot add or update a child row', false],
             'mysql deadlock' => ['40001', 1213, 'Deadlock found when trying to get lock', false],
         ];
