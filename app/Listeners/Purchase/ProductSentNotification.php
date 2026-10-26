@@ -30,20 +30,14 @@ class ProductSentNotification
         $content = 'Your product has been sent by vendor ['.$event->vendor->user->username.']';
         $routeName = 'profile.purchases.single';
         $routeParams = serialize(['purchase'=>$event->purchase->id]);
-        $notifications = $event->buyer->notifications();
-
-        // Lifecycle event delivery may be replayed after a later side effect
-        // fails. The stable purchase route payload identifies an already
-        // persisted notification and suppresses notify() on that replay.
-        $alreadyDelivered = $notifications
-            ->where('route_name', $routeName)
-            ->where('route_params', $routeParams)
-            ->exists();
-
-        if ($alreadyDelivered) {
-            return;
-        }
-
-        $event->buyer->notify($content,$routeName,$routeParams);
+        // Two workers may replay the same lifecycle event concurrently. The
+        // deterministic key is enforced by the existing notification primary
+        // key, so only the winning insert dispatches the optional side effect.
+        $event->buyer->notifyOnce(
+            'purchase-sent:' . $event->purchase->id,
+            $content,
+            $routeName,
+            $routeParams
+        );
     }
 }

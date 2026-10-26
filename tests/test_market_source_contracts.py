@@ -400,5 +400,21 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("testConcurrentNotificationReplayPersistsOneDelivery", mysql_test)
         self.assertIn("mysql unrelated unique key", unit_test)
 
+    def test_sent_and_delivered_notifications_use_atomic_delivery_identity(self):
+        sent = (
+            self.root / "app/Listeners/Purchase/ProductSentNotification.php"
+        ).read_text(encoding="utf-8")
+        delivered = (
+            self.root / "app/Listeners/Purchase/ProductDeliveredNotification.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("'purchase-sent:' . $event->purchase->id", sent)
+        self.assertIn("$event->buyer->notifyOnce(", sent)
+        self.assertNotIn("->notifications()", sent)
+
+        self.assertIn("'purchase-delivered:' . $event->purchase->id", delivered)
+        self.assertIn("$event->vendor->user->notifyOnce(", delivered)
+        self.assertNotIn("->notifications()", delivered)
+
 if __name__ == "__main__":
     unittest.main()
