@@ -53,7 +53,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         persisted_branch = self.request_source[start:end]
 
         duplicate_check = (
-            "$editingProduct->offers()->where('min_quantity', $minQuantity)->exists()"
+            "$lockedProduct->offers()->where('min_quantity', $minQuantity)->exists()"
         )
         self.assertIn(duplicate_check, persisted_branch)
         self.assertLess(
@@ -122,10 +122,10 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         end = self.controller_source.index("public function addDeliveryShow", start)
         remove_offer_source = self.controller_source[start:end]
 
-        target = "$offersToRemove = $product->offers()->where('min_quantity', $quantity);"
+        target = "$offersToRemove = $lockedProduct->offers()->where('min_quantity', $quantity);"
         missing_guard = "if (!$offersToRemove->exists())"
         remaining_guard = (
-            "if (!$product->offers()->where('min_quantity', '!=', $quantity)->exists())"
+            "if (!$lockedProduct->offers()->where('min_quantity', '!=', $quantity)->exists())"
         )
         mutation = "$offersToRemove->update(['deleted' => 1]);"
 
