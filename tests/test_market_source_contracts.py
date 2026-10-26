@@ -66,6 +66,57 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         )
 
 
+    def test_persisted_offer_mutations_share_product_first_lock_order(self):
+        start = self.request_source.index(
+            "if ($editingProduct && $editingProduct->exists) {"
+        )
+        end = self.request_source.index("// offer for new product", start)
+        persisted_add = self.request_source[start:end]
+        add_lock = (
+            "Product::whereKey($editingProduct->getKey())\n"
+            "                    ->lockForUpdate()"
+        )
+        self.assertIn("DB::transaction(function ()", persisted_add)
+        self.assertIn(add_lock, persisted_add)
+        self.assertLess(
+            persisted_add.index(add_lock),
+            persisted_add.index("$lockedProduct->offers()->where("),
+        )
+        self.assertIn("$newOffer -> product_id = $lockedProduct -> id;", persisted_add)
+
+        remove_start = self.controller_source.index("public function removeOffer")
+        remove_end = self.controller_source.index(
+            "public function addDeliveryShow", remove_start
+        )
+        persisted_remove = self.controller_source[remove_start:remove_end]
+        remove_lock = (
+            "Product::whereKey($product->getKey())\n"
+            "                        ->lockForUpdate()"
+        )
+        self.assertIn("DB::transaction(function ()", persisted_remove)
+        self.assertIn(remove_lock, persisted_remove)
+        self.assertLess(
+            persisted_remove.index(remove_lock),
+            persisted_remove.index("$lockedProduct->offers()->where("),
+        )
+        self.assertIn(
+            "$lockedProduct->offers()->where('min_quantity', '!=', $quantity)",
+            persisted_remove,
+        )
+
+        mysql_test = (
+            self.root / "tests/Integration/MySqlWalletEscrowIntegrationTest.php"
+        ).read_text(encoding="utf-8")
+        offer_worker = (
+            self.root / "tests/Integration/fixtures/mysql_offer_worker.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "testConcurrentPersistedOfferRequestsCreateOneActiveTier", mysql_test
+        )
+        self.assertIn("['created', 'duplicate']", mysql_test)
+        self.assertIn("NewOfferRequest::create", offer_worker)
+        self.assertIn("$request->persist(Product::findOrFail($productId));", offer_worker)
+
     def test_persisted_offer_removal_validates_target_and_remaining_tier(self):
         start = self.controller_source.index("public function removeOffer")
         end = self.controller_source.index("public function addDeliveryShow", start)
