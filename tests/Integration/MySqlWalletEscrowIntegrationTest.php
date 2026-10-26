@@ -396,6 +396,31 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return $payload;
     }
 
+    private function startOfferRemovalWorker($productId, $quantity, $readyFile, $goFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_offer_removal_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $productId,
+            $quantity,
+            $readyFile,
+            $goFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated offer-removal worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
     public function testConcurrentPersistedOfferRequestsCreateOneActiveTier()
     {
         $productId = '13131313-1313-4131-8131-131313131313';
@@ -427,6 +452,71 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             $this->assertSame(['created', 'duplicate'], $statuses);
             $this->assertSame(1, Offer::where('product_id', $productId)
                 ->where('min_quantity', 2)
+                ->where('deleted', false)
+                ->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
+    public function testConcurrentPersistedOfferRemovalsKeepOneActiveTier()
+    {
+        $productId = '14141414-1414-4141-8141-141414141414';
+        DB::table('products')->insert(['id' => $productId]);
+        DB::table('offers')->insert([
+            [
+                'id' => '15151515-1515-4151-8151-151515151515',
+                'product_id' => $productId,
+                'min_quantity' => 1,
+                'price' => '10.00',
+                'deleted' => false,
+            ],
+            [
+                'id' => '16161616-1616-4161-8161-161616161616',
+                'product_id' => $productId,
+                'min_quantity' => 2,
+                'price' => '9.00',
+                'deleted' => false,
+            ],
+        ]);
+        $token = sys_get_temp_dir() . '/eckmar-offer-removal-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startOfferRemovalWorker($productId, '1', $readyOne, $goFile);
+            $workers[] = $this->startOfferRemovalWorker($productId, '2', $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $first = $this->collectOfferWorker($workers[0]);
+            $second = $this->collectOfferWorker($workers[1]);
+            $workers = [];
+
+            $statuses = [$first['status'], $second['status']];
+            sort($statuses);
+            $this->assertSame(['kept', 'removed'], $statuses);
+            $this->assertSame(1, Offer::where('product_id', $productId)
                 ->where('deleted', false)
                 ->count());
         } finally {
