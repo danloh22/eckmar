@@ -150,7 +150,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
 
         validation = "$validatedQuantity = filter_var($quantity, FILTER_VALIDATE_INT"
         assignment = "$quantity = $validatedQuantity;"
-        persisted_query = "$offersToRemove = $product->offers()->where('min_quantity', $quantity);"
+        persisted_query = "$offersToRemove = $lockedProduct->offers()->where('min_quantity', $quantity);"
         draft_mutation = "session() -> put('product_offers', $offers);"
 
         for contract in (validation, assignment, persisted_query, draft_mutation):
