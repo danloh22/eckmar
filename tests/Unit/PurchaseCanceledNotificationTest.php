@@ -92,7 +92,12 @@ class PurchaseCanceledNotificationUserDouble extends User
     public $notificationsSent = 0;
     public $persistedNotifications = [];
 
-    public function notifyOnce($deliveryKey, $content, $routeName = null, $routeParams = null)
+    public function notifyOnce(
+        string $deliveryKey,
+        string $content,
+        ?string $routeName = null,
+        ?string $routeParams = null
+    ): bool
     {
         if (array_key_exists($deliveryKey, $this->persistedNotifications)) {
             return false;
