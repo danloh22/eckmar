@@ -454,5 +454,29 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("$event->purchase->buyer->notifyOnce(", listener)
         self.assertNotIn("->notifications()", listener)
 
+
+    def test_disputed_notifications_use_atomic_per_recipient_delivery_identity(self):
+        listener = (
+            self.root / "app/Listeners/Purchase/ProductDisputedNotification.php"
+        ).read_text(encoding="utf-8")
+        unit_test = (
+            self.root / "tests/Unit/ProductDisputedNotificationTest.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "'purchase-disputed-buyer:' . $event->purchase->id", listener
+        )
+        self.assertIn("$event->buyer->notifyOnce(", listener)
+        self.assertIn(
+            "'purchase-disputed-vendor:' . $event->purchase->id", listener
+        )
+        self.assertIn("$event->vendor->user->notifyOnce(", listener)
+        self.assertNotIn("->notifications()", listener)
+        self.assertIn("testBuyerAndVendorUseSeparateDeliveryIdentities", unit_test)
+        self.assertIn(
+            "testRecoveryReplayAfterPostPersistFailureDoesNotDuplicateProductDisputedNotification",
+            unit_test,
+        )
+
 if __name__ == "__main__":
     unittest.main()
