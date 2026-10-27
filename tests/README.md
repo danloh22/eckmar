@@ -81,3 +81,10 @@ GitHub Actions run [39841904670](https://github.com/danloh22/eckmar/actions/runs
 - **External integrations:** Exercise wallet daemon/RPC connectivity, deposits, withdrawals, escrow settlement, coin-rate API failure handling, messaging, and search indexing against isolated test services or mocks. Do not use live funds, live wallet credentials, or production endpoints.
 - **Deployment controls:** Verify secret management, `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, restricted admin access, worker/scheduler configuration, durable storage, backups, restoration drills, monitoring, and rollback on a separate staging environment.
 - **Release decision:** PR #3 remains a draft until the above checks are evidenced. Do not equate green PHPUnit CI with a production approval or deploy automatically.
+
+
+## Atomic experience-update regression — 27 October 2026
+
+The `Experience` trait now delegates grants and deductions to Eloquent's database-side `increment` and `decrement` operations, checks that exactly one row changed, and refreshes the model only after success. `ExperienceAtomicUpdateTest` covers both operations and the zero-row failure path; the Python source contract rejects the former read-modify-save sequence.
+
+This prevents lost deltas between concurrent workers, but it does not deduplicate a replayed business event. A durable event identity remains necessary before an identical reward or deduction can be proven exactly-once. No live database, wallet RPC, funds, migration or production endpoint is used by this test batch.
