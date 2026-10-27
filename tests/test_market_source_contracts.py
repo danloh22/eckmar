@@ -343,15 +343,22 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         end = source.index("protected function sameCheckoutIdentity(", start)
         classifier = source[start:end]
 
-        self.assertIn("$sqlState === '23000' && $driverCode === '1062'", classifier)
+        self.assertIn("$sqlState === '23000'", classifier)
+        self.assertIn("$driverCode === '1062'", classifier)
+        self.assertIn("for key 'purchases.primary'", classifier)
+        self.assertIn("for key `purchases.primary`", classifier)
         self.assertIn("$sqlState === '23505'", classifier)
+        self.assertIn("purchases_pkey", classifier)
         self.assertIn("$driverCode === '19'", classifier)
-        self.assertIn("'unique constraint failed'", classifier)
+        self.assertIn("unique constraint failed: purchases.id", classifier)
         self.assertNotIn("strpos($message, 'duplicate entry')", classifier)
         self.assertNotIn("in_array($code, ['23000', '23505']", classifier)
         checkout_tests = (
             self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
         ).read_text(encoding="utf-8")
+        self.assertIn("'mysql unrelated unique key'", checkout_tests)
+        self.assertIn("'postgres unrelated unique key'", checkout_tests)
+        self.assertIn("'sqlite unrelated unique key'", checkout_tests)
         self.assertIn("'mysql foreign key'", checkout_tests)
         self.assertIn("'deadlock with duplicate-like text'", checkout_tests)
         self.assertIn("'misleading sqlite-like message'", checkout_tests)
