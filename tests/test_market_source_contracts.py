@@ -464,11 +464,11 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn(
-            "'purchase-disputed-buyer:' . $event->purchase->id", listener
+            "'dispute-opened-buyer:' . $event->purchase->id", listener
         )
         self.assertIn("$event->buyer->notifyOnce(", listener)
         self.assertIn(
-            "'purchase-disputed-vendor:' . $event->purchase->id", listener
+            "'dispute-opened-vendor:' . $event->purchase->id", listener
         )
         self.assertIn("$event->vendor->user->notifyOnce(", listener)
         self.assertNotIn("->notifications()", listener)
