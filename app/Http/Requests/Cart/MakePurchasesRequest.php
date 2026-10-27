@@ -185,11 +185,17 @@ class MakePurchasesRequest extends FormRequest
             $driverCode = isset($errorInfo[1]) ? (string) $errorInfo[1] : '';
             $message = strtolower($current->getMessage());
 
-            if (($sqlState === '23000' && $driverCode === '1062')
-                || $sqlState === '23505'
+            if (($sqlState === '23000'
+                    && $driverCode === '1062'
+                    && (strpos($message, "for key 'primary'") !== false
+                        || strpos($message, "for key 'purchases.primary'") !== false
+                        || strpos($message, 'for key \`primary\`') !== false
+                        || strpos($message, 'for key \`purchases.primary\`') !== false))
+                || ($sqlState === '23505'
+                    && strpos($message, 'purchases_pkey') !== false)
                 || ($sqlState === '23000'
                     && $driverCode === '19'
-                    && strpos($message, 'unique constraint failed') !== false)
+                    && strpos($message, 'unique constraint failed: purchases.id') !== false)
             ) {
                 return true;
             }
