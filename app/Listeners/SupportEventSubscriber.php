@@ -16,7 +16,14 @@ class SupportEventSubscriber {
         $content = 'There is a new reply on your support ticket by ['.$event->ticketReply->user->username.']';
         $routeName = 'profile.tickets';
         $routeParams = serialize(['ticket'=>$event->ticketReply->ticket->id]);
-        $event->ticketReply->ticket->user->notify($content,$routeName,$routeParams);
+        // A ticket may have many legitimate replies, so replay identity must
+        // be scoped to the persisted reply rather than to the parent ticket.
+        $event->ticketReply->ticket->user->notifyOnce(
+            'ticket-reply:' . $event->ticketReply->id,
+            $content,
+            $routeName,
+            $routeParams
+        );
     }
 
 

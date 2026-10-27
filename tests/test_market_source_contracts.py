@@ -478,9 +478,6 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             unit_test,
         )
 
-if __name__ == "__main__":
-    unittest.main()
-
 class TicketClosedNotificationSourceContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -504,4 +501,33 @@ class TicketClosedNotificationSourceContractTest(unittest.TestCase):
         self.assertIn("testDifferentTicketsUseDifferentDeliveryIdentities", self.phpunit)
         self.assertIn("testRecoveryReplayAfterPostPersistFailure", self.phpunit)
         self.assertIn("): bool", self.phpunit)
+
+
+class TicketReplyNotificationSourceContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = Path(__file__).resolve().parents[1]
+        cls.listener = (
+            cls.root / "app/Listeners/SupportEventSubscriber.php"
+        ).read_text(encoding="utf-8")
+        cls.phpunit = (
+            cls.root / "tests/Unit/SupportTicketReplyNotificationTest.php"
+        ).read_text(encoding="utf-8")
+
+    def test_ticket_reply_uses_atomic_per_reply_delivery_identity(self):
+        start = self.listener.index("public function onNewTicketMessage")
+        end = self.listener.index("public function onTicketClosed", start)
+        method = self.listener[start:end]
+
+        self.assertIn("$event->ticketReply->ticket->user->notifyOnce(", method)
+        self.assertIn("'ticket-reply:' . $event->ticketReply->id", method)
+        self.assertNotIn("->notify(", method)
+        self.assertIn("testRecoveryReplayDoesNotSendTicketReplyNotificationTwice", self.phpunit)
+        self.assertIn("testDifferentRepliesOnSameTicketUseDifferentDeliveryIdentities", self.phpunit)
+        self.assertIn("testRecoveryReplayAfterPostPersistFailure", self.phpunit)
+        self.assertIn("): bool", self.phpunit)
+
+
+if __name__ == "__main__":
+    unittest.main()
 
