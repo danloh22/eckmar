@@ -23,6 +23,10 @@ class ProductDisputedNotificationTest extends TestCase
 
         $this->assertSame(0, $buyer->notificationsSent);
         $this->assertSame(1, $vendor->notificationsSent);
+        $this->assertSame(
+            'purchase-disputed-vendor:' . $purchase->id,
+            $vendor->lastDeliveryKey
+        );
     }
 
     public function testRecoveryReplayDoesNotSendProductDisputedNotificationTwice()
@@ -36,16 +40,36 @@ class ProductDisputedNotificationTest extends TestCase
 
         $this->assertSame(0, $buyer->notificationsSent);
         $this->assertSame(1, $vendor->notificationsSent);
+        $this->assertSame(
+            'purchase-disputed-vendor:' . $purchase->id,
+            $vendor->lastDeliveryKey
+        );
         $this->assertSame([
             'Purchase for a product you sold is being disputed',
             'profile.sales.single',
             serialize(['sale' => $purchase->id]),
         ], $vendor->lastNotification);
-        $this->assertSame([
-            ['description', 'Purchase for a product you sold is being disputed'],
-            ['route_name', 'profile.sales.single'],
-            ['route_params', serialize(['sale' => $purchase->id])],
-        ], $vendor->lastNotificationQuery->filters);
+    }
+
+    public function testBuyerAndVendorUseSeparateDeliveryIdentities()
+    {
+        $purchase = $this->purchaseWithNotificationUsers($buyer, $vendor);
+        $listener = new ProductDisputedNotification();
+
+        $listener->handle(new ProductDisputed($purchase, $vendor));
+        $listener->handle(new ProductDisputed($purchase, $buyer));
+
+        $this->assertSame(1, $buyer->notificationsSent);
+        $this->assertSame(1, $vendor->notificationsSent);
+        $this->assertSame(
+            'purchase-disputed-buyer:' . $purchase->id,
+            $buyer->lastDeliveryKey
+        );
+        $this->assertSame(
+            'purchase-disputed-vendor:' . $purchase->id,
+            $vendor->lastDeliveryKey
+        );
+        $this->assertNotSame($buyer->lastDeliveryKey, $vendor->lastDeliveryKey);
     }
 
     public function testRecoveryReplayAfterPostPersistFailureDoesNotDuplicateProductDisputedNotification()
@@ -67,16 +91,15 @@ class ProductDisputedNotificationTest extends TestCase
 
         $this->assertSame(1, $buyer->notificationsSent);
         $this->assertSame(0, $vendor->notificationsSent);
+        $this->assertSame(
+            'purchase-disputed-buyer:' . $purchase->id,
+            $buyer->lastDeliveryKey
+        );
         $this->assertSame([
             'Purchase for a product you bought is being disputed',
             'profile.purchases.single',
             serialize(['purchase' => $purchase->id]),
         ], $buyer->lastNotification);
-        $this->assertSame([
-            ['description', 'Purchase for a product you bought is being disputed'],
-            ['route_name', 'profile.purchases.single'],
-            ['route_params', serialize(['purchase' => $purchase->id])],
-        ], $buyer->lastNotificationQuery->filters);
     }
 
     private function purchaseWithNotificationUsers(&$buyer, &$vendor)
@@ -104,69 +127,34 @@ class ProductDisputedNotificationTest extends TestCase
 class ProductDisputedNotificationUserDouble extends User
 {
     public $failAfterPersisting = false;
+    public $lastDeliveryKey;
     public $lastNotification = [];
-    public $lastNotificationQuery;
     public $notificationsSent = 0;
-    public $persistedNotifications = [];
+    public $persistedDeliveryKeys = [];
 
-    public function notifications()
-    {
-        $this->lastNotificationQuery = new ProductDisputedNotificationQueryDouble($this);
+    public function notifyOnce(
+        string $deliveryKey,
+        string $content,
+        ?string $routeName = null,
+        ?string $routeParams = null
+    ): bool {
+        if (array_key_exists($deliveryKey, $this->persistedDeliveryKeys)) {
+            return false;
+        }
 
-        return $this->lastNotificationQuery;
-    }
-
-    public function notify($content, $routeName = null, $routeParams = null)
-    {
-        $this->notificationsSent++;
-        $this->lastNotification = [$content, $routeName, $routeParams];
-        $this->persistedNotifications[] = [
+        $this->persistedDeliveryKeys[$deliveryKey] = [
             'description' => $content,
             'route_name' => $routeName,
             'route_params' => $routeParams,
         ];
+        $this->notificationsSent++;
+        $this->lastDeliveryKey = $deliveryKey;
+        $this->lastNotification = [$content, $routeName, $routeParams];
 
         if ($this->failAfterPersisting) {
             throw new \RuntimeException('post-persistence side effect failed');
         }
-    }
-}
 
-class ProductDisputedNotificationQueryDouble
-{
-    public $filters = [];
-    private $user;
-
-    public function __construct(ProductDisputedNotificationUserDouble $user)
-    {
-        $this->user = $user;
-    }
-
-    public function where($column, $value)
-    {
-        $this->filters[] = [$column, $value];
-
-        return $this;
-    }
-
-    public function exists()
-    {
-        foreach ($this->user->persistedNotifications as $notification) {
-            $matches = true;
-
-            foreach ($this->filters as $filter) {
-                if (!array_key_exists($filter[0], $notification)
-                    || $notification[$filter[0]] !== $filter[1]) {
-                    $matches = false;
-                    break;
-                }
-            }
-
-            if ($matches) {
-                return true;
-            }
-        }
-
-        return false;
+        return true;
     }
 }
