@@ -528,6 +528,37 @@ class TicketReplyNotificationSourceContractTest(unittest.TestCase):
         self.assertIn("): bool", self.phpunit)
 
 
+class MessageNotificationSourceContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = Path(__file__).resolve().parents[1]
+        cls.listener = (
+            cls.root / "app/Listeners/SendMessageNotifications.php"
+        ).read_text(encoding="utf-8")
+        cls.phpunit = (
+            cls.root / "tests/Unit/SendMessageNotificationsTest.php"
+        ).read_text(encoding="utf-8")
+
+    def test_message_notification_uses_atomic_per_message_delivery_identity(self):
+        self.assertIn("$event->message->getReceiver()->notifyOnce(", self.listener)
+        self.assertIn(
+            "'message-received:' . $event->message->id", self.listener
+        )
+        self.assertNotIn("->notify(", self.listener)
+        self.assertNotIn("->notifications()", self.listener)
+        self.assertIn(
+            "testRecoveryReplayDoesNotSendMessageNotificationTwice", self.phpunit
+        )
+        self.assertIn(
+            "testDifferentMessagesInSameConversationUseDifferentDeliveryIdentities",
+            self.phpunit,
+        )
+        self.assertIn(
+            "testRecoveryReplayAfterPostPersistFailure", self.phpunit
+        )
+        self.assertIn("): bool", self.phpunit)
+
+
 if __name__ == "__main__":
     unittest.main()
 
