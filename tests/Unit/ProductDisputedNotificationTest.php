@@ -24,7 +24,7 @@ class ProductDisputedNotificationTest extends TestCase
         $this->assertSame(0, $buyer->notificationsSent);
         $this->assertSame(1, $vendor->notificationsSent);
         $this->assertSame(
-            'purchase-disputed-vendor:' . $purchase->id,
+            'dispute-opened-vendor:' . $purchase->id,
             $vendor->lastDeliveryKey
         );
     }
@@ -41,7 +41,7 @@ class ProductDisputedNotificationTest extends TestCase
         $this->assertSame(0, $buyer->notificationsSent);
         $this->assertSame(1, $vendor->notificationsSent);
         $this->assertSame(
-            'purchase-disputed-vendor:' . $purchase->id,
+            'dispute-opened-vendor:' . $purchase->id,
             $vendor->lastDeliveryKey
         );
         $this->assertSame([
@@ -62,11 +62,11 @@ class ProductDisputedNotificationTest extends TestCase
         $this->assertSame(1, $buyer->notificationsSent);
         $this->assertSame(1, $vendor->notificationsSent);
         $this->assertSame(
-            'purchase-disputed-buyer:' . $purchase->id,
+            'dispute-opened-buyer:' . $purchase->id,
             $buyer->lastDeliveryKey
         );
         $this->assertSame(
-            'purchase-disputed-vendor:' . $purchase->id,
+            'dispute-opened-vendor:' . $purchase->id,
             $vendor->lastDeliveryKey
         );
         $this->assertNotSame($buyer->lastDeliveryKey, $vendor->lastDeliveryKey);
@@ -92,7 +92,7 @@ class ProductDisputedNotificationTest extends TestCase
         $this->assertSame(1, $buyer->notificationsSent);
         $this->assertSame(0, $vendor->notificationsSent);
         $this->assertSame(
-            'purchase-disputed-buyer:' . $purchase->id,
+            'dispute-opened-buyer:' . $purchase->id,
             $buyer->lastDeliveryKey
         );
         $this->assertSame([
