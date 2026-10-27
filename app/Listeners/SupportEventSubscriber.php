@@ -24,28 +24,15 @@ class SupportEventSubscriber {
         $content = 'Your support ticket has been closed by administrator';
         $routeName = 'profile.tickets';
         $routeParams = serialize(['ticket'=>$event->ticket->id]);
-        $this->notifyOnce($event->ticket->user, $content, $routeName, $routeParams);
-    }
-
-    /**
-     * Suppress a sequential replay after the close notification was persisted.
-     *
-     * New-ticket-reply notifications are deliberately not deduplicated here:
-     * a ticket can have multiple legitimate replies from the same user.
-     */
-    private function notifyOnce($user, $content, $routeName, $routeParams)
-    {
-        $alreadyDelivered = $user->notifications()
-            ->where('description', $content)
-            ->where('route_name', $routeName)
-            ->where('route_params', $routeParams)
-            ->exists();
-
-        if ($alreadyDelivered) {
-            return;
-        }
-
-        $user->notify($content, $routeName, $routeParams);
+        // A stable ticket identity lets concurrent/replayed close events
+        // contend on the notification primary key rather than racing through
+        // a read-before-create check.
+        $event->ticket->user->notifyOnce(
+            'ticket-closed:' . $event->ticket->id,
+            $content,
+            $routeName,
+            $routeParams
+        );
     }
 
     /**

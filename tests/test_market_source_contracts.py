@@ -480,3 +480,28 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TicketClosedNotificationSourceContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = Path(__file__).resolve().parents[1]
+        cls.listener = (
+            cls.root / "app/Listeners/SupportEventSubscriber.php"
+        ).read_text(encoding="utf-8")
+        cls.phpunit = (
+            cls.root / "tests/Unit/SupportTicketClosedNotificationTest.php"
+        ).read_text(encoding="utf-8")
+
+    def test_ticket_close_uses_atomic_stable_delivery_identity(self):
+        start = self.listener.index("public function onTicketClosed")
+        end = self.listener.index("public function subscribe", start)
+        method = self.listener[start:end]
+
+        self.assertIn("$event->ticket->user->notifyOnce(", method)
+        self.assertIn("'ticket-closed:' . $event->ticket->id", method)
+        self.assertNotIn("->notifications()", method)
+        self.assertIn("testRecoveryReplayDoesNotSendTicketClosedNotificationTwice", self.phpunit)
+        self.assertIn("testDifferentTicketsUseDifferentDeliveryIdentities", self.phpunit)
+        self.assertIn("testRecoveryReplayAfterPostPersistFailure", self.phpunit)
+        self.assertIn("): bool", self.phpunit)
+
