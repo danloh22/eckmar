@@ -566,6 +566,25 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertIn("): bool", self.phpunit)
 
 
+    def test_experience_updates_are_atomic_and_fail_closed(self):
+        source = (
+            self.root / "app/Traits/Experience.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("$this->increment('experience', $value) !== 1", source)
+        self.assertIn("$this->decrement('experience', $value) !== 1", source)
+        self.assertEqual(2, source.count("$this->refresh();"))
+        self.assertNotIn("$this->experience += $value", source)
+        self.assertNotIn("$this->experience -= $value", source)
+        self.assertNotIn("$this->save();", source)
+
+        unit_test = (
+            self.root / "tests/Unit/ExperienceAtomicUpdateTest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn("testGrantDelegatesToAtomicIncrementAndRefreshes", unit_test)
+        self.assertIn("testTakeDelegatesToAtomicDecrementAndRefreshes", unit_test)
+        self.assertIn("testFailedAtomicUpdateDoesNotRefreshStaleState", unit_test)
+
 if __name__ == "__main__":
     unittest.main()
 
