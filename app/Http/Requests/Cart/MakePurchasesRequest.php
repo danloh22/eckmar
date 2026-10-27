@@ -189,8 +189,8 @@ class MakePurchasesRequest extends FormRequest
                     && $driverCode === '1062'
                     && (strpos($message, "for key 'primary'") !== false
                         || strpos($message, "for key 'purchases.primary'") !== false
-                        || strpos($message, 'for key \`primary\`') !== false
-                        || strpos($message, 'for key \`purchases.primary\`') !== false))
+                        || strpos($message, 'for key `primary`') !== false
+                        || strpos($message, 'for key `purchases.primary`') !== false))
                 || ($sqlState === '23505'
                     && strpos($message, 'purchases_pkey') !== false)
                 || ($sqlState === '23000'
