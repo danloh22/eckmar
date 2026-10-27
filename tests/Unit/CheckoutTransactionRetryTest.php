@@ -354,6 +354,7 @@ class CheckoutTransactionRetryTest extends TestCase
         return [
             'mysql purchase primary key' => ['23000', 1062, "Duplicate entry 'purchase-id' for key 'purchases.PRIMARY'", true],
             'mysql unqualified primary key' => ['23000', 1062, "Duplicate entry 'purchase-id' for key 'PRIMARY'", true],
+            'mysql unquoted qualified primary key' => ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY', true],
             'mysql backtick primary key' => ['23000', 1062, 'Duplicate entry purchase-id for key `purchases.PRIMARY`', true],
             'postgres purchase primary key' => ['23505', 7, 'duplicate key value violates unique constraint "purchases_pkey"', true],
             'sqlite purchase primary key' => ['23000', 19, 'UNIQUE constraint failed: purchases.id', true],
