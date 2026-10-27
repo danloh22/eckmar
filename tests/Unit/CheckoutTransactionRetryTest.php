@@ -352,9 +352,14 @@ class CheckoutTransactionRetryTest extends TestCase
     public function duplicateIdentityDatabaseErrors()
     {
         return [
-            'mysql duplicate' => ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY', true],
-            'postgres duplicate' => ['23505', 7, 'duplicate key value violates unique constraint', true],
-            'sqlite duplicate' => ['23000', 19, 'UNIQUE constraint failed: purchases.id', true],
+            'mysql purchase primary key' => ['23000', 1062, "Duplicate entry 'purchase-id' for key 'purchases.PRIMARY'", true],
+            'mysql unqualified primary key' => ['23000', 1062, "Duplicate entry 'purchase-id' for key 'PRIMARY'", true],
+            'mysql backtick primary key' => ['23000', 1062, 'Duplicate entry purchase-id for key `purchases.PRIMARY`', true],
+            'postgres purchase primary key' => ['23505', 7, 'duplicate key value violates unique constraint "purchases_pkey"', true],
+            'sqlite purchase primary key' => ['23000', 19, 'UNIQUE constraint failed: purchases.id', true],
+            'mysql unrelated unique key' => ['23000', 1062, "Duplicate entry 'buyer-btc' for key 'wallets.user_id_coin_unique'", false],
+            'postgres unrelated unique key' => ['23505', 7, 'duplicate key value violates unique constraint "wallets_user_coin_key"', false],
+            'sqlite unrelated unique key' => ['23000', 19, 'UNIQUE constraint failed: wallets.user_id, wallets.coin', false],
             'deadlock with duplicate-like text' => ['40001', 1213, 'Deadlock after duplicate entry diagnostic', false],
             'misleading sqlite-like message' => ['HY000', 5, 'unique constraint failed while handling I/O', false],
             'mysql foreign key' => ['23000', 1452, 'Cannot add or update a child row', false],
