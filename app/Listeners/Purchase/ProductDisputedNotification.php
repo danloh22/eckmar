@@ -34,7 +34,7 @@ class ProductDisputedNotification
             $routeName = 'profile.purchases.single';
             $routeParams = serialize(['purchase'=>$event->purchase->id]);
             $event->buyer->notifyOnce(
-                'purchase-disputed-buyer:' . $event->purchase->id,
+                'dispute-opened-buyer:' . $event->purchase->id,
                 $content,
                 $routeName,
                 $routeParams
@@ -49,7 +49,7 @@ class ProductDisputedNotification
             $routeName = 'profile.sales.single';
             $routeParams = serialize(['sale'=>$event->purchase->id]);
             $event->vendor->user->notifyOnce(
-                'purchase-disputed-vendor:' . $event->purchase->id,
+                'dispute-opened-vendor:' . $event->purchase->id,
                 $content,
                 $routeName,
                 $routeParams
