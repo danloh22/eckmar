@@ -99,3 +99,5 @@ The test uses only the disposable CI MySQL service and a minimal test-only vendo
 The same harness also runs a mixed-operation race: one stale worker grants 11 XP while another takes 7 XP from a starting value of 100. The final value must be 104. The worker accepts only the explicit operations `grant` and `take`; any other operation fails closed. This covers concurrent database-side decrement behavior but does not provide business-event replay identity.
 
 The experience worker also validates its amount as a canonical positive 32-bit integer. Runtime regressions reject unknown operations and amounts such as `0`, `-1`, `7oops`, `07` and overflow before a readiness file can be created. These checks protect the disposable test contract; they do not alter production XP semantics.
+
+The disposable MySQL suite also calls checkout's production offer resolver without entering payment logic. It verifies the shared Product -> Offer lock order, accepts an active offer, and rejects a soft-deleted offer before any payment or inventory work. This reduces checkout/offer-edit deadlock risk and prevents stale cart entries from purchasing removed tiers.

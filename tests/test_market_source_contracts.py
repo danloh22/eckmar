@@ -613,6 +613,36 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertIn("$vendor->takeExperience($amount);", worker)
         self.assertNotIn("wallet", worker.lower())
 
+    def test_checkout_locks_product_before_reloading_active_offer(self):
+        source = (
+            self.root / "app/Traits/Purchasable.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("protected function lockActiveOfferAndProduct()")
+        end = source.index("private function markingAsSent()", start)
+        resolver = source[start:end]
+
+        reference = "$offerReference = Offer::where('id', $this->offer_id)"
+        product_lock = "$product = Product::where('id', $offerReference->product_id)"
+        active_offer = "$offer = Offer::where('id', $this->offer_id)"
+        deleted_guard = "->where('deleted', '=', 0)"
+
+        for contract in (reference, product_lock, active_offer, deleted_guard):
+            self.assertIn(contract, resolver)
+        self.assertNotIn("$offerReference = Offer::where('id', $this->offer_id)->lockForUpdate()", resolver)
+        self.assertLess(resolver.index(reference), resolver.index(product_lock))
+        self.assertLess(resolver.index(product_lock), resolver.index(active_offer))
+        self.assertLess(resolver.index(active_offer), resolver.index(deleted_guard))
+        self.assertIn("Selected offer is no longer available.", resolver)
+
+        purchased_start = source.index("public function purchased()")
+        resolver_start = source.index("protected function lockActiveOfferAndProduct()")
+        purchased = source[purchased_start:resolver_start]
+        self.assertIn("list($offer, $product) = $this->lockActiveOfferAndProduct();", purchased)
+        self.assertLess(
+            purchased.index("lockActiveOfferAndProduct"),
+            purchased.index("app() -> makeWith"),
+        )
+
 if __name__ == "__main__":
     unittest.main()
 

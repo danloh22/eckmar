@@ -809,6 +809,54 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         }
     }
 
+    public function testCheckoutOfferResolverLocksAndReturnsActiveOffer()
+    {
+        $productId = '23232323-2323-4323-8323-232323232323';
+        $offerId = '24242424-2424-4424-8424-242424242424';
+        DB::table('products')->insert(['id' => $productId]);
+        DB::table('offers')->insert([
+            'id' => $offerId,
+            'product_id' => $productId,
+            'min_quantity' => 1,
+            'price' => '10.00',
+            'deleted' => 0,
+        ]);
+
+        $resolved = DB::transaction(function () use ($offerId) {
+            return (new PurchasableOfferLockProbe($offerId))->resolve();
+        });
+
+        $this->assertSame($offerId, $resolved[0]->id);
+        $this->assertSame($productId, $resolved[1]->id);
+        $this->assertFalse((bool) $resolved[0]->deleted);
+    }
+
+    public function testCheckoutOfferResolverRejectsDeletedOfferBeforePaymentLogic()
+    {
+        $productId = '25252525-2525-4525-8525-252525252525';
+        $offerId = '26262626-2626-4626-8626-262626262626';
+        DB::table('products')->insert(['id' => $productId]);
+        DB::table('offers')->insert([
+            'id' => $offerId,
+            'product_id' => $productId,
+            'min_quantity' => 1,
+            'price' => '10.00',
+            'deleted' => 1,
+        ]);
+
+        try {
+            DB::transaction(function () use ($offerId) {
+                (new PurchasableOfferLockProbe($offerId))->resolve();
+            });
+            $this->fail('A deleted offer must not enter checkout payment logic.');
+        } catch (\App\Exceptions\RequestException $error) {
+            $this->assertSame(
+                'Selected offer is no longer available. Please add the product again.',
+                $error->getMessage()
+            );
+        }
+    }
+
     public function testConcurrentFirstWalletRequestsResolveToOneMysqlRow()
     {
         $userId = '12121212-1212-4121-8121-121212121212';
@@ -1021,5 +1069,22 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         } catch (\App\Exceptions\RequestException $expected) {
             $this->assertSame('50', (string) $wallet->fresh()->available_atomic);
         }
+    }
+}
+
+class PurchasableOfferLockProbe
+{
+    use \App\Traits\Purchasable;
+
+    public $offer_id;
+
+    public function __construct($offerId)
+    {
+        $this->offer_id = $offerId;
+    }
+
+    public function resolve()
+    {
+        return $this->lockActiveOfferAndProduct();
     }
 }
