@@ -38,7 +38,6 @@ class MakePurchasesRequest extends FormRequest
 
     public function persist(WalletLedgerService $ledger = null)
     {
-        $ledger = $ledger ?: app(WalletLedgerService::class);
         $purchases = [];
         $items = [];
         $transactionCompleted = false;
@@ -57,6 +56,9 @@ class MakePurchasesRequest extends FormRequest
                 return $purchase;
             }, $items);
             $this->assertStableCheckoutIdentities($items);
+            // Resolve the ledger only after the cart and its recovery identities
+            // have passed the side-effect-free preflight.
+            $ledger = $ledger ?: app(WalletLedgerService::class);
             // Do not automatically retry this closure: rollback does not reset the
             // captured Eloquent models' exists/attributes or the purchases list.
             // Reusing them after a deadlock could update an insert that rolled back.

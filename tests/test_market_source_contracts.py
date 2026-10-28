@@ -202,9 +202,13 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         start = source.index("public function persist(")
         persist_source = source[start:]
         guard_call = "$this->assertStableCheckoutIdentities($items);"
+        ledger_resolution = "$ledger = $ledger ?: app(WalletLedgerService::class);"
         transaction = "DB::transaction("
 
         self.assertIn(guard_call, persist_source)
+        self.assertIn(ledger_resolution, persist_source)
+        self.assertLess(persist_source.index(guard_call), persist_source.index(ledger_resolution))
+        self.assertLess(persist_source.index(ledger_resolution), persist_source.index(transaction))
         self.assertLess(persist_source.index(guard_call), persist_source.index(transaction))
 
         guard_start = source.index("protected function assertStableCheckoutIdentities(")
@@ -222,7 +226,10 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("testDuplicatePurchaseIdsAreRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("testMissingOrNonStringPurchaseIdIsRejectedBeforeOpeningTransaction", checkout_tests)
-        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 2)
+        self.assertIn("testInvalidCartDoesNotResolveLedgerService", checkout_tests)
+        self.assertIn("testLedgerResolutionFailureIsNormalizedBeforeTransaction", checkout_tests)
+        self.assertIn("Ledger service must not be resolved for an invalid cart.", checkout_tests)
+        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 4)
 
     def test_profile_purchase_views_authorize_before_rendering(self):
         source = (

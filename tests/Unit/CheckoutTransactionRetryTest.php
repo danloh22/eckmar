@@ -165,6 +165,59 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    public function testInvalidCartDoesNotResolveLedgerService()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout identity is missing or duplicated. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = '';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+        app()->bind(WalletLedgerService::class, function () {
+            throw new \RuntimeException('Ledger service must not be resolved for an invalid cart.');
+        });
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist();
+            $this->fail('Invalid cart must fail before resolving the ledger service.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout identity is missing or duplicated. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function testLedgerResolutionFailureIsNormalizedBeforeTransaction()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Ledger service unavailable');
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'valid-purchase-id';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+        app()->bind(WalletLedgerService::class, function () {
+            throw new \RuntimeException('Ledger service unavailable');
+        });
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist();
+            $this->fail('Ledger resolution failure must stop checkout.');
+        } catch (RequestException $exception) {
+            $this->assertSame('Error happened! Try again later!', $exception->getMessage());
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     public function invalidCheckoutIdentityValues()
     {
         return [
