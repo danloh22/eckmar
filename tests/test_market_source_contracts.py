@@ -643,6 +643,39 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
             purchased.index("app() -> makeWith"),
         )
 
+    def test_checkout_offer_race_uses_production_resolver_without_payment(self):
+        worker = (
+            self.root / "tests/Integration/fixtures/mysql_checkout_offer_worker.php"
+        ).read_text(encoding="utf-8")
+        removal_worker = (
+            self.root / "tests/Integration/fixtures/mysql_offer_removal_hold_worker.php"
+        ).read_text(encoding="utf-8")
+        mysql_test = (
+            self.root / "tests/Integration/MySqlWalletEscrowIntegrationTest.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("use \\App\\Traits\\Purchasable;", worker)
+        self.assertIn("return $this->lockActiveOfferAndProduct();", worker)
+        self.assertIn("DB::transaction", worker)
+        self.assertIn("ECKMAR_DISPOSABLE_MYSQL", worker)
+        self.assertNotIn("Wallet", worker)
+        self.assertNotIn("Payment", worker)
+        self.assertIn("DB::listen", removal_worker)
+        self.assertIn("QueryExecuted", removal_worker)
+        self.assertIn("update `offers`", removal_worker)
+        self.assertIn("$controller->removeOffer", removal_worker)
+        self.assertIn("$mutationHeldFile", removal_worker)
+        self.assertIn("$releaseFile", removal_worker)
+        self.assertNotIn("Wallet", removal_worker)
+        self.assertNotIn("Payment", removal_worker)
+        self.assertIn("testCheckoutOfferResolutionAndRemovalUseOneBoundedLockOrder", mysql_test)
+        self.assertIn("startCheckoutOfferWorker", mysql_test)
+        self.assertIn("startHeldOfferRemovalWorker", mysql_test)
+        self.assertIn("mysql_offer_removal_hold_worker.php", mysql_test)
+        self.assertIn("assertFileNotExists($checkoutDone", mysql_test)
+        self.assertIn("$this->assertSame('rejected', $checkout['status']);", mysql_test)
+        self.assertIn("$this->assertSame('removed', $removal['status']);", mysql_test)
+
 if __name__ == "__main__":
     unittest.main()
 

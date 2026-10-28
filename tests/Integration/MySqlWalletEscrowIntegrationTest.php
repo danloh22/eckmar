@@ -540,6 +540,58 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return [$process, $pipes];
     }
 
+    private function startCheckoutOfferWorker($offerId, $readyFile, $goFile, $doneFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_checkout_offer_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $offerId,
+            $readyFile,
+            $goFile,
+            $doneFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated checkout-offer worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function startHeldOfferRemovalWorker($productId, $quantity, $readyFile, $goFile, $mutationHeldFile, $releaseFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_offer_removal_hold_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $productId,
+            $quantity,
+            $readyFile,
+            $goFile,
+            $mutationHeldFile,
+            $releaseFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start held offer-removal worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
     public function testConcurrentPersistedOfferRequestsCreateOneActiveTier()
     {
         $productId = '13131313-1313-4131-8131-131313131313';
@@ -854,6 +906,108 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
                 'Selected offer is no longer available. Please add the product again.',
                 $error->getMessage()
             );
+        }
+    }
+
+    public function testCheckoutOfferResolutionAndRemovalUseOneBoundedLockOrder()
+    {
+        $productId = '27272727-2727-4727-8727-272727272727';
+        $targetOfferId = '28282828-2828-4828-8828-282828282828';
+        $remainingOfferId = '29292929-2929-4929-8929-292929292929';
+        DB::table('products')->insert(['id' => $productId]);
+        DB::table('offers')->insert([
+            [
+                'id' => $targetOfferId,
+                'product_id' => $productId,
+                'min_quantity' => 1,
+                'price' => '10.00',
+                'deleted' => 0,
+            ],
+            [
+                'id' => $remainingOfferId,
+                'product_id' => $productId,
+                'min_quantity' => 2,
+                'price' => '9.00',
+                'deleted' => 0,
+            ],
+        ]);
+
+        $token = sys_get_temp_dir() . '/eckmar-checkout-offer-race-' . str_replace('.', '', uniqid('', true));
+        $removalReady = $token . '-removal.ready';
+        $removalGo = $token . '-removal.go';
+        $mutationHeld = $token . '-mutation-held';
+        $releaseRemoval = $token . '-release-removal';
+        $checkoutReady = $token . '-checkout.ready';
+        $checkoutGo = $token . '-checkout.go';
+        $checkoutDone = $token . '-checkout.done';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startHeldOfferRemovalWorker(
+                $productId,
+                '1',
+                $removalReady,
+                $removalGo,
+                $mutationHeld,
+                $releaseRemoval
+            );
+
+            $deadline = microtime(true) + 10;
+            while (!is_file($removalReady) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($removalReady);
+            $this->assertTrue(touch($removalGo));
+
+            $deadline = microtime(true) + 10;
+            while (!is_file($mutationHeld) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($mutationHeld);
+
+            $this->assertTrue(touch($checkoutGo));
+            $workers[] = $this->startCheckoutOfferWorker($targetOfferId, $checkoutReady, $checkoutGo, $checkoutDone);
+            $deadline = microtime(true) + 10;
+            while (!is_file($checkoutReady) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($checkoutReady);
+            usleep(100000);
+            $this->assertFileNotExists($checkoutDone, 'Checkout must wait while removal holds the product lock.');
+
+            $this->assertTrue(touch($releaseRemoval));
+
+            $removal = $this->collectOfferWorker($workers[0]);
+            $checkout = $this->collectOfferWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame('removed', $removal['status']);
+            $this->assertSame('rejected', $checkout['status']);
+            $this->assertSame(
+                'Selected offer is no longer available. Please add the product again.',
+                $checkout['message']
+            );
+            $this->assertFileExists($checkoutDone);
+            $this->assertTrue((bool) Offer::where('id', $targetOfferId)->value('deleted'));
+            $this->assertTrue(Offer::where('id', $remainingOfferId)->where('deleted', false)->exists());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($checkoutReady);
+            @unlink($checkoutGo);
+            @unlink($checkoutDone);
+            @unlink($removalReady);
+            @unlink($removalGo);
+            @unlink($mutationHeld);
+            @unlink($releaseRemoval);
         }
     }
 
