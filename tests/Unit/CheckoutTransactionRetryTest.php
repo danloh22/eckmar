@@ -98,6 +98,84 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    public function testDuplicatePurchaseIdsAreRejectedBeforeOpeningTransaction()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout identity is missing or duplicated. Please rebuild your cart.'
+        );
+
+        $first = new CheckoutPurchaseDouble();
+        $first->id = 'duplicate-purchase-id';
+        $second = new CheckoutPurchaseDouble();
+        $second->id = 'duplicate-purchase-id';
+        session()->put(Cart::SESSION_NAME, [
+            'first-product' => $first,
+            'second-product' => $second,
+        ]);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist($ledger);
+            $this->fail('Duplicate checkout identities must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout identity is missing or duplicated. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($first, session()->get(Cart::SESSION_NAME)['first-product']);
+        $this->assertSame($second, session()->get(Cart::SESSION_NAME)['second-product']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    /**
+     * @dataProvider invalidCheckoutIdentityValues
+     */
+    public function testMissingOrNonStringPurchaseIdIsRejectedBeforeOpeningTransaction($invalidId)
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout identity is missing or duplicated. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->setAttribute('id', $invalidId);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist($ledger);
+            $this->fail('Unstable checkout identity must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout identity is missing or duplicated. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function invalidCheckoutIdentityValues()
+    {
+        return [
+            'missing' => [null],
+            'empty' => [''],
+            'whitespace' => [' purchase-id '],
+            'integer' => [42],
+            'array' => [['purchase-id']],
+        ];
+    }
+
     public function testAmbiguousCommitRecoversMatchingPersistedPurchases()
     {
         Event::fake([NewPurchase::class]);

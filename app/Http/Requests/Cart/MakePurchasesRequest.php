@@ -56,6 +56,7 @@ class MakePurchasesRequest extends FormRequest
                 $purchase->setRelations([]);
                 return $purchase;
             }, $items);
+            $this->assertStableCheckoutIdentities($items);
             // Do not automatically retry this closure: rollback does not reset the
             // captured Eloquent models' exists/attributes or the purchases list.
             // Reusing them after a deadlock could update an insert that rolled back.
@@ -126,6 +127,28 @@ class MakePurchasesRequest extends FormRequest
     protected function clearCheckoutCart()
     {
         Cart::getCart()->clearCart();
+    }
+
+    /**
+     * Recovery is keyed by the purchase UUID. Reject a corrupted session cart
+     * before opening a transaction so one committed row can never satisfy two
+     * cart entries during duplicate-key or ambiguous-commit recovery.
+     *
+     * @param array $items
+     * @throws RequestException
+     */
+    protected function assertStableCheckoutIdentities(array $items)
+    {
+        $seen = [];
+        foreach ($items as $item) {
+            $id = $item->getAttribute('id');
+            if (!is_string($id) || $id === '' || trim($id) !== $id || isset($seen[$id])) {
+                throw new RequestException(
+                    'Checkout identity is missing or duplicated. Please rebuild your cart.'
+                );
+            }
+            $seen[$id] = true;
+        }
     }
 
     /**

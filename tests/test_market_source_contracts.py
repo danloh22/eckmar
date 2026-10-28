@@ -195,6 +195,35 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             persist_source.index(transaction),
         )
 
+    def test_checkout_validates_stable_unique_identities_before_transaction(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("public function persist(")
+        persist_source = source[start:]
+        guard_call = "$this->assertStableCheckoutIdentities($items);"
+        transaction = "DB::transaction("
+
+        self.assertIn(guard_call, persist_source)
+        self.assertLess(persist_source.index(guard_call), persist_source.index(transaction))
+
+        guard_start = source.index("protected function assertStableCheckoutIdentities(")
+        guard_end = source.index("protected function recoverCommittedCheckout(", guard_start)
+        guard = source[guard_start:guard_end]
+        self.assertIn("$item->getAttribute('id')", guard)
+        self.assertIn("!is_string($id)", guard)
+        self.assertIn("trim($id) !== $id", guard)
+        self.assertIn("isset($seen[$id])", guard)
+        self.assertIn("$seen[$id] = true;", guard)
+        self.assertIn("Checkout identity is missing or duplicated", guard)
+
+        checkout_tests = (
+            self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn("testDuplicatePurchaseIdsAreRejectedBeforeOpeningTransaction", checkout_tests)
+        self.assertIn("testMissingOrNonStringPurchaseIdIsRejectedBeforeOpeningTransaction", checkout_tests)
+        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 2)
+
     def test_profile_purchase_views_authorize_before_rendering(self):
         source = (
             self.root / "app/Http/Controllers/ProfileController.php"
