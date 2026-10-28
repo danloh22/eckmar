@@ -622,12 +622,18 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         resolver = source[start:end]
 
         reference = "$offerReference = Offer::where('id', $this->offer_id)"
+        transaction_guard = "DB::connection()->transactionLevel() < 1"
         product_lock = "$product = Product::where('id', $offerReference->product_id)"
         active_offer = "$offer = Offer::where('id', $this->offer_id)"
         deleted_guard = "->where('deleted', '=', 0)"
 
-        for contract in (reference, product_lock, active_offer, deleted_guard):
+        for contract in (transaction_guard, reference, product_lock, active_offer, deleted_guard):
             self.assertIn(contract, resolver)
+        self.assertLess(resolver.index(transaction_guard), resolver.index(reference))
+        self.assertIn(
+            "Checkout offer resolution requires an active database transaction.",
+            resolver,
+        )
         self.assertNotIn("$offerReference = Offer::where('id', $this->offer_id)->lockForUpdate()", resolver)
         self.assertLess(resolver.index(reference), resolver.index(product_lock))
         self.assertLess(resolver.index(product_lock), resolver.index(active_offer))
@@ -669,6 +675,7 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertNotIn("Wallet", removal_worker)
         self.assertNotIn("Payment", removal_worker)
         self.assertIn("testCheckoutOfferResolutionAndRemovalUseOneBoundedLockOrder", mysql_test)
+        self.assertIn("testCheckoutOfferResolverRequiresActiveTransaction", mysql_test)
         self.assertIn("startCheckoutOfferWorker", mysql_test)
         self.assertIn("startHeldOfferRemovalWorker", mysql_test)
         self.assertIn("mysql_offer_removal_hold_worker.php", mysql_test)

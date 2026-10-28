@@ -883,6 +883,18 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $this->assertFalse((bool) $resolved[0]->deleted);
     }
 
+    public function testCheckoutOfferResolverRequiresActiveTransaction()
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(
+            'Checkout offer resolution requires an active database transaction.'
+        );
+
+        (new PurchasableOfferLockProbe(
+            '30303030-3030-4030-8030-303030303030'
+        ))->resolve();
+    }
+
     public function testCheckoutOfferResolverRejectsDeletedOfferBeforePaymentLogic()
     {
         $productId = '25252525-2525-4525-8525-252525252525';

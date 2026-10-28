@@ -76,6 +76,12 @@ trait Purchasable {
      */
     protected function lockActiveOfferAndProduct()
     {
+        if (DB::connection()->transactionLevel() < 1) {
+            throw new \LogicException(
+                'Checkout offer resolution requires an active database transaction.'
+            );
+        }
+
         $offerReference = Offer::where('id', $this->offer_id)
             ->select(['id', 'product_id'])
             ->first();
