@@ -585,6 +585,22 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertIn("testTakeDelegatesToAtomicDecrementAndRefreshes", unit_test)
         self.assertIn("testFailedAtomicUpdateDoesNotRefreshStaleState", unit_test)
 
+    def test_mysql_experience_regression_uses_two_stale_workers(self):
+        mysql_test = (
+            self.root / "tests/Integration/MySqlWalletEscrowIntegrationTest.php"
+        ).read_text(encoding="utf-8")
+        worker = (
+            self.root / "tests/Integration/fixtures/mysql_experience_worker.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("testConcurrentExperienceGrantsPreserveBothDeltas", mysql_test)
+        self.assertEqual(2, mysql_test.count("startExperienceWorker($vendorId"))
+        self.assertIn("118,", mysql_test)
+        self.assertIn("$vendor = Vendor::findOrFail($vendorId);", worker)
+        self.assertLess(worker.index("Vendor::findOrFail"), worker.index("touch($readyFile)"))
+        self.assertIn("$vendor->grantExperience($amount);", worker)
+        self.assertNotIn("wallet", worker.lower())
+
 if __name__ == "__main__":
     unittest.main()
 

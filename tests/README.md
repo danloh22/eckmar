@@ -88,3 +88,10 @@ GitHub Actions run [39841904670](https://github.com/danloh22/eckmar/actions/runs
 The `Experience` trait now delegates grants and deductions to Eloquent's database-side `increment` and `decrement` operations, checks that exactly one row changed, and refreshes the model only after success. `ExperienceAtomicUpdateTest` covers both operations and the zero-row failure path; the Python source contract rejects the former read-modify-save sequence.
 
 This prevents lost deltas between concurrent workers, but it does not deduplicate a replayed business event. A durable event identity remains necessary before an identical reward or deduction can be proven exactly-once. No live database, wallet RPC, funds, migration or production endpoint is used by this test batch.
+
+
+## Disposable-MySQL concurrent experience regression — 28 October 2026
+
+The MySQL integration suite now starts two independent PHP processes that both load the same vendor before a shared barrier and then grant different XP deltas. Starting at 100 XP, the final database value must be 118 after grants of 7 and 11. This would expose the former stale-model read-modify-save race while exercising the database-side atomic increment used by the current trait.
+
+The test uses only the disposable CI MySQL service and a minimal test-only vendors table. It does not contact wallets, payment services or production systems. It still does not make replayed business events idempotent.

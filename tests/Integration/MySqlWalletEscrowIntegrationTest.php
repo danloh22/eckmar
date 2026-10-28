@@ -53,6 +53,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             Schema::dropIfExists('market_fee_wallets');
             Schema::dropIfExists('wallets');
             Schema::dropIfExists('purchases');
+            Schema::dropIfExists('vendors');
             Schema::dropIfExists('users');
         }
         parent::tearDown();
@@ -62,6 +63,15 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
     {
         Schema::create('users', function (Blueprint $t) {
             $t->uuid('id')->primary();
+            $t->timestamps();
+        });
+        Schema::create('vendors', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+            $t->unsignedInteger('vendor_level')->default(0);
+            $t->integer('experience')->default(0);
+            $t->text('about')->nullable();
+            $t->text('profilebg')->nullable();
+            $t->boolean('trusted')->default(false);
             $t->timestamps();
         });
         Schema::create('notifications', function (Blueprint $t) {
@@ -405,6 +415,48 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return $payload;
     }
 
+    private function startExperienceWorker($vendorId, $amount, $readyFile, $goFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_experience_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $vendorId,
+            $amount,
+            $readyFile,
+            $goFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated experience worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function collectExperienceWorker(array $worker)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, $stderr);
+        $payload = json_decode(trim($stdout), true);
+        $this->assertTrue(is_array($payload), 'Experience worker did not return JSON: ' . $stdout);
+        $this->assertArrayHasKey('experience', $payload);
+
+        return $payload;
+    }
+
     private function startOfferWorker($productId, $price, $readyFile, $goFile, $minQuantity)
     {
         $worker = base_path('tests/Integration/fixtures/mysql_offer_worker.php');
@@ -571,6 +623,58 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             $this->assertSame(1, Offer::where('product_id', $productId)
                 ->where('deleted', false)
                 ->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
+    public function testConcurrentExperienceGrantsPreserveBothDeltas()
+    {
+        $vendorId = '19191919-1919-4191-8191-191919191919';
+        DB::table('users')->insert(['id' => $vendorId]);
+        DB::table('vendors')->insert([
+            'id' => $vendorId,
+            'vendor_level' => 0,
+            'experience' => 100,
+        ]);
+        $token = sys_get_temp_dir() . '/eckmar-experience-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startExperienceWorker($vendorId, '7', $readyOne, $goFile);
+            $workers[] = $this->startExperienceWorker($vendorId, '11', $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $this->collectExperienceWorker($workers[0]);
+            $this->collectExperienceWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame(
+                118,
+                (int) DB::table('vendors')->where('id', $vendorId)->value('experience')
+            );
         } finally {
             foreach ($workers as $worker) {
                 if (is_resource($worker[0])) {
