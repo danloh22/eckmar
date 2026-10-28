@@ -458,6 +458,20 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return $payload;
     }
 
+    private function collectRejectedExperienceWorker(array $worker, $expectedExitCode, $expectedError)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame($expectedExitCode, $exitCode, $stderr);
+        $this->assertSame('', trim($stdout));
+        $this->assertSame($expectedError, trim($stderr));
+    }
+
     private function startOfferWorker($productId, $price, $readyFile, $goFile, $minQuantity)
     {
         $worker = base_path('tests/Integration/fixtures/mysql_offer_worker.php');
@@ -742,6 +756,56 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             @unlink($readyOne);
             @unlink($readyTwo);
             @unlink($goFile);
+        }
+    }
+
+    public function testExperienceWorkerRejectsUnknownOperationBeforeBarrier()
+    {
+        $token = sys_get_temp_dir() . '/eckmar-experience-invalid-operation-' . str_replace('.', '', uniqid('', true));
+        $readyFile = $token . '.ready';
+        $goFile = $token . '.go';
+
+        try {
+            $worker = $this->startExperienceWorker(
+                '21212121-2121-4121-8121-212121212121',
+                'award',
+                '7',
+                $readyFile,
+                $goFile
+            );
+            $this->collectRejectedExperienceWorker($worker, 5, 'Unknown experience operation.');
+            $this->assertFileNotExists($readyFile);
+        } finally {
+            @unlink($readyFile);
+            @unlink($goFile);
+        }
+    }
+
+    public function testExperienceWorkerRejectsNonCanonicalAmountsBeforeBarrier()
+    {
+        foreach (['0', '-1', '7oops', '07', '2147483648'] as $index => $amount) {
+            $token = sys_get_temp_dir() . '/eckmar-experience-invalid-amount-' . $index . '-' . str_replace('.', '', uniqid('', true));
+            $readyFile = $token . '.ready';
+            $goFile = $token . '.go';
+
+            try {
+                $worker = $this->startExperienceWorker(
+                    '22222222-2222-4222-8222-222222222222',
+                    'grant',
+                    $amount,
+                    $readyFile,
+                    $goFile
+                );
+                $this->collectRejectedExperienceWorker(
+                    $worker,
+                    6,
+                    'Experience amount must be a canonical positive integer.'
+                );
+                $this->assertFileNotExists($readyFile);
+            } finally {
+                @unlink($readyFile);
+                @unlink($goFile);
+            }
         }
     }
 

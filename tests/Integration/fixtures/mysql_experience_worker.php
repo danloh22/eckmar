@@ -26,13 +26,21 @@ DB::purge('mysql');
 
 $vendorId = $argv[1];
 $operation = $argv[2];
-$amount = (int) $argv[3];
+$amountInput = $argv[3];
 $readyFile = $argv[4];
 $goFile = $argv[5];
 
 if (!in_array($operation, ['grant', 'take'], true)) {
     fwrite(STDERR, "Unknown experience operation.\n");
     exit(5);
+}
+
+$amount = filter_var($amountInput, FILTER_VALIDATE_INT, [
+    'options' => ['min_range' => 1, 'max_range' => 2147483647],
+]);
+if ($amount === false || (string) $amount !== $amountInput) {
+    fwrite(STDERR, "Experience amount must be a canonical positive integer.\n");
+    exit(6);
 }
 
 // Load before the barrier so the regression reproduces the stale-model

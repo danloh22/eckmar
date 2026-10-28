@@ -97,3 +97,5 @@ The MySQL integration suite now starts two independent PHP processes that both l
 The test uses only the disposable CI MySQL service and a minimal test-only vendors table. It does not contact wallets, payment services or production systems. It still does not make replayed business events idempotent.
 
 The same harness also runs a mixed-operation race: one stale worker grants 11 XP while another takes 7 XP from a starting value of 100. The final value must be 104. The worker accepts only the explicit operations `grant` and `take`; any other operation fails closed. This covers concurrent database-side decrement behavior but does not provide business-event replay identity.
+
+The experience worker also validates its amount as a canonical positive 32-bit integer. Runtime regressions reject unknown operations and amounts such as `0`, `-1`, `7oops`, `07` and overflow before a readiness file can be created. These checks protect the disposable test contract; they do not alter production XP semantics.
