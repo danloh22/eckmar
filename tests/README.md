@@ -95,3 +95,5 @@ This prevents lost deltas between concurrent workers, but it does not deduplicat
 The MySQL integration suite now starts two independent PHP processes that both load the same vendor before a shared barrier and then grant different XP deltas. Starting at 100 XP, the final database value must be 118 after grants of 7 and 11. This would expose the former stale-model read-modify-save race while exercising the database-side atomic increment used by the current trait.
 
 The test uses only the disposable CI MySQL service and a minimal test-only vendors table. It does not contact wallets, payment services or production systems. It still does not make replayed business events idempotent.
+
+The same harness also runs a mixed-operation race: one stale worker grants 11 XP while another takes 7 XP from a starting value of 100. The final value must be 104. The worker accepts only the explicit operations `grant` and `take`; any other operation fails closed. This covers concurrent database-side decrement behavior but does not provide business-event replay identity.

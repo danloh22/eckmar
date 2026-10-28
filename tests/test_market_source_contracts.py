@@ -594,11 +594,15 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("testConcurrentExperienceGrantsPreserveBothDeltas", mysql_test)
-        self.assertEqual(2, mysql_test.count("startExperienceWorker($vendorId"))
+        self.assertIn("testConcurrentExperienceGrantAndTakePreserveBothDeltas", mysql_test)
+        self.assertEqual(4, mysql_test.count("$workers[] = $this->startExperienceWorker($vendorId"))
         self.assertIn("118,", mysql_test)
+        self.assertIn("104,", mysql_test)
         self.assertIn("$vendor = Vendor::findOrFail($vendorId);", worker)
         self.assertLess(worker.index("Vendor::findOrFail"), worker.index("touch($readyFile)"))
+        self.assertIn("in_array($operation, ['grant', 'take'], true)", worker)
         self.assertIn("$vendor->grantExperience($amount);", worker)
+        self.assertIn("$vendor->takeExperience($amount);", worker)
         self.assertNotIn("wallet", worker.lower())
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ require $root . '/vendor/autoload.php';
 $app = require $root . '/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
-if (getenv('ECKMAR_DISPOSABLE_MYSQL') !== 'yes' || count($argv) !== 5) {
+if (getenv('ECKMAR_DISPOSABLE_MYSQL') !== 'yes' || count($argv) !== 6) {
     fwrite(STDERR, "Disposable MySQL experience worker invoked without its test contract.\n");
     exit(2);
 }
@@ -25,9 +25,15 @@ config([
 DB::purge('mysql');
 
 $vendorId = $argv[1];
-$amount = (int) $argv[2];
-$readyFile = $argv[3];
-$goFile = $argv[4];
+$operation = $argv[2];
+$amount = (int) $argv[3];
+$readyFile = $argv[4];
+$goFile = $argv[5];
+
+if (!in_array($operation, ['grant', 'take'], true)) {
+    fwrite(STDERR, "Unknown experience operation.\n");
+    exit(5);
+}
 
 // Load before the barrier so the regression reproduces the stale-model
 // read-modify-save race that previously lost one concurrent delta.
@@ -47,5 +53,9 @@ while (!is_file($goFile)) {
     usleep(10000);
 }
 
-$vendor->grantExperience($amount);
+if ($operation === 'grant') {
+    $vendor->grantExperience($amount);
+} else {
+    $vendor->takeExperience($amount);
+}
 echo json_encode(['experience' => (int) $vendor->experience]);

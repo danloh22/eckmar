@@ -415,13 +415,14 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return $payload;
     }
 
-    private function startExperienceWorker($vendorId, $amount, $readyFile, $goFile)
+    private function startExperienceWorker($vendorId, $operation, $amount, $readyFile, $goFile)
     {
         $worker = base_path('tests/Integration/fixtures/mysql_experience_worker.php');
         $command = implode(' ', array_map('escapeshellarg', [
             PHP_BINARY,
             $worker,
             $vendorId,
+            $operation,
             $amount,
             $readyFile,
             $goFile,
@@ -656,8 +657,8 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $workers = [];
 
         try {
-            $workers[] = $this->startExperienceWorker($vendorId, '7', $readyOne, $goFile);
-            $workers[] = $this->startExperienceWorker($vendorId, '11', $readyTwo, $goFile);
+            $workers[] = $this->startExperienceWorker($vendorId, 'grant', '7', $readyOne, $goFile);
+            $workers[] = $this->startExperienceWorker($vendorId, 'grant', '11', $readyTwo, $goFile);
 
             $deadline = microtime(true) + 10;
             while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
@@ -673,6 +674,58 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
 
             $this->assertSame(
                 118,
+                (int) DB::table('vendors')->where('id', $vendorId)->value('experience')
+            );
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
+    public function testConcurrentExperienceGrantAndTakePreserveBothDeltas()
+    {
+        $vendorId = '20202020-2020-4020-8020-202020202020';
+        DB::table('users')->insert(['id' => $vendorId]);
+        DB::table('vendors')->insert([
+            'id' => $vendorId,
+            'vendor_level' => 0,
+            'experience' => 100,
+        ]);
+        $token = sys_get_temp_dir() . '/eckmar-experience-mixed-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startExperienceWorker($vendorId, 'grant', '11', $readyOne, $goFile);
+            $workers[] = $this->startExperienceWorker($vendorId, 'take', '7', $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $this->collectExperienceWorker($workers[0]);
+            $this->collectExperienceWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame(
+                104,
                 (int) DB::table('vendors')->where('id', $vendorId)->value('experience')
             );
         } finally {
