@@ -3,6 +3,8 @@
 namespace Tests\Integration;
 
 use App\MarketFeeWallet;
+use App\Offer;
+use App\Product;
 use App\Purchase;
 use App\Services\WalletLedgerService;
 use App\User;
@@ -43,11 +45,15 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
     protected function tearDown()
     {
         if (getenv('ECKMAR_DISPOSABLE_MYSQL') === 'yes') {
+            Schema::dropIfExists('notifications');
+            Schema::dropIfExists('offers');
+            Schema::dropIfExists('products');
             Schema::dropIfExists('wallet_escrow_holds');
             Schema::dropIfExists('wallet_ledger_entries');
             Schema::dropIfExists('market_fee_wallets');
             Schema::dropIfExists('wallets');
             Schema::dropIfExists('purchases');
+            Schema::dropIfExists('vendors');
             Schema::dropIfExists('users');
         }
         parent::tearDown();
@@ -57,6 +63,36 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
     {
         Schema::create('users', function (Blueprint $t) {
             $t->uuid('id')->primary();
+            $t->timestamps();
+        });
+        Schema::create('vendors', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+            $t->unsignedInteger('vendor_level')->default(0);
+            $t->integer('experience')->default(0);
+            $t->text('about')->nullable();
+            $t->text('profilebg')->nullable();
+            $t->boolean('trusted')->default(false);
+            $t->timestamps();
+        });
+        Schema::create('notifications', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+            $t->uuid('user_id');
+            $t->mediumText('description');
+            $t->boolean('read')->default(false);
+            $t->text('route_name')->nullable();
+            $t->mediumText('route_params')->nullable();
+            $t->timestamps();
+        });
+        Schema::create('products', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+            $t->timestamps();
+        });
+        Schema::create('offers', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+            $t->uuid('product_id');
+            $t->integer('min_quantity');
+            $t->decimal('price', 16, 2);
+            $t->boolean('deleted')->default(false);
             $t->timestamps();
         });
         Schema::create('purchases', function (Blueprint $t) {
@@ -295,6 +331,795 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return $payload;
     }
 
+    private function startWalletWorker($userId, $coin, $readyFile, $goFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_wallet_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $userId,
+            $coin,
+            $readyFile,
+            $goFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated wallet worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function collectWalletWorker(array $worker)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, $stderr);
+        $payload = json_decode(trim($stdout), true);
+        $this->assertTrue(is_array($payload), 'Wallet worker did not return JSON: ' . $stdout);
+        $this->assertArrayHasKey('wallet_id', $payload);
+
+        return $payload;
+    }
+
+    private function startNotificationWorker($userId, $deliveryKey, $readyFile, $goFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_notification_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $userId,
+            $deliveryKey,
+            $readyFile,
+            $goFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated notification worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function collectNotificationWorker(array $worker)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, $stderr);
+        $payload = json_decode(trim($stdout), true);
+        $this->assertTrue(is_array($payload), 'Notification worker did not return JSON: ' . $stdout);
+        $this->assertArrayHasKey('created', $payload);
+
+        return $payload;
+    }
+
+    private function startExperienceWorker($vendorId, $operation, $amount, $readyFile, $goFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_experience_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $vendorId,
+            $operation,
+            $amount,
+            $readyFile,
+            $goFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated experience worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function collectExperienceWorker(array $worker)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, $stderr);
+        $payload = json_decode(trim($stdout), true);
+        $this->assertTrue(is_array($payload), 'Experience worker did not return JSON: ' . $stdout);
+        $this->assertArrayHasKey('experience', $payload);
+
+        return $payload;
+    }
+
+    private function collectRejectedExperienceWorker(array $worker, $expectedExitCode, $expectedError)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame($expectedExitCode, $exitCode, $stderr);
+        $this->assertSame('', trim($stdout));
+        $this->assertSame($expectedError, trim($stderr));
+    }
+
+    private function startOfferWorker($productId, $price, $readyFile, $goFile, $minQuantity)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_offer_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $productId,
+            $price,
+            $readyFile,
+            $goFile,
+            $minQuantity,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated offer worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function collectOfferWorker(array $worker)
+    {
+        list($process, $pipes) = $worker;
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, $stderr);
+        $payload = json_decode(trim($stdout), true);
+        $this->assertTrue(is_array($payload), 'Offer worker did not return JSON: ' . $stdout);
+        $this->assertArrayHasKey('status', $payload);
+
+        return $payload;
+    }
+
+    private function startOfferRemovalWorker($productId, $quantity, $readyFile, $goFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_offer_removal_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $productId,
+            $quantity,
+            $readyFile,
+            $goFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated offer-removal worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function startCheckoutOfferWorker($offerId, $readyFile, $goFile, $doneFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_checkout_offer_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $offerId,
+            $readyFile,
+            $goFile,
+            $doneFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start isolated checkout-offer worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function startHeldOfferRemovalWorker($productId, $quantity, $readyFile, $goFile, $mutationHeldFile, $releaseFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_offer_removal_hold_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $productId,
+            $quantity,
+            $readyFile,
+            $goFile,
+            $mutationHeldFile,
+            $releaseFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start held offer-removal worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    public function testConcurrentPersistedOfferRequestsCreateOneActiveTier()
+    {
+        $productId = '13131313-1313-4131-8131-131313131313';
+        DB::table('products')->insert(['id' => $productId]);
+        $token = sys_get_temp_dir() . '/eckmar-offer-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startOfferWorker($productId, '10.00', $readyOne, $goFile, '2');
+            $workers[] = $this->startOfferWorker($productId, '11.00', $readyTwo, $goFile, '2');
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $first = $this->collectOfferWorker($workers[0]);
+            $second = $this->collectOfferWorker($workers[1]);
+            $workers = [];
+
+            $statuses = [$first['status'], $second['status']];
+            sort($statuses);
+            $this->assertSame(['created', 'duplicate'], $statuses);
+            $this->assertSame(1, Offer::where('product_id', $productId)
+                ->where('min_quantity', 2)
+                ->where('deleted', false)
+                ->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
+    public function testConcurrentPersistedOfferRemovalsKeepOneActiveTier()
+    {
+        $productId = '14141414-1414-4141-8141-141414141414';
+        DB::table('products')->insert(['id' => $productId]);
+        DB::table('offers')->insert([
+            [
+                'id' => '15151515-1515-4151-8151-151515151515',
+                'product_id' => $productId,
+                'min_quantity' => 1,
+                'price' => '10.00',
+                'deleted' => false,
+            ],
+            [
+                'id' => '16161616-1616-4161-8161-161616161616',
+                'product_id' => $productId,
+                'min_quantity' => 2,
+                'price' => '9.00',
+                'deleted' => false,
+            ],
+        ]);
+        $token = sys_get_temp_dir() . '/eckmar-offer-removal-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startOfferRemovalWorker($productId, '1', $readyOne, $goFile);
+            $workers[] = $this->startOfferRemovalWorker($productId, '2', $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $first = $this->collectOfferWorker($workers[0]);
+            $second = $this->collectOfferWorker($workers[1]);
+            $workers = [];
+
+            $statuses = [$first['status'], $second['status']];
+            sort($statuses);
+            $this->assertSame(['kept', 'removed'], $statuses);
+            $this->assertSame(1, Offer::where('product_id', $productId)
+                ->where('deleted', false)
+                ->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
+    public function testConcurrentExperienceGrantsPreserveBothDeltas()
+    {
+        $vendorId = '19191919-1919-4191-8191-191919191919';
+        DB::table('users')->insert(['id' => $vendorId]);
+        DB::table('vendors')->insert([
+            'id' => $vendorId,
+            'vendor_level' => 0,
+            'experience' => 100,
+        ]);
+        $token = sys_get_temp_dir() . '/eckmar-experience-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startExperienceWorker($vendorId, 'grant', '7', $readyOne, $goFile);
+            $workers[] = $this->startExperienceWorker($vendorId, 'grant', '11', $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $this->collectExperienceWorker($workers[0]);
+            $this->collectExperienceWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame(
+                118,
+                (int) DB::table('vendors')->where('id', $vendorId)->value('experience')
+            );
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
+    public function testConcurrentExperienceGrantAndTakePreserveBothDeltas()
+    {
+        $vendorId = '20202020-2020-4020-8020-202020202020';
+        DB::table('users')->insert(['id' => $vendorId]);
+        DB::table('vendors')->insert([
+            'id' => $vendorId,
+            'vendor_level' => 0,
+            'experience' => 100,
+        ]);
+        $token = sys_get_temp_dir() . '/eckmar-experience-mixed-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startExperienceWorker($vendorId, 'grant', '11', $readyOne, $goFile);
+            $workers[] = $this->startExperienceWorker($vendorId, 'take', '7', $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $this->collectExperienceWorker($workers[0]);
+            $this->collectExperienceWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame(
+                104,
+                (int) DB::table('vendors')->where('id', $vendorId)->value('experience')
+            );
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
+    public function testExperienceWorkerRejectsUnknownOperationBeforeBarrier()
+    {
+        $token = sys_get_temp_dir() . '/eckmar-experience-invalid-operation-' . str_replace('.', '', uniqid('', true));
+        $readyFile = $token . '.ready';
+        $goFile = $token . '.go';
+
+        try {
+            $worker = $this->startExperienceWorker(
+                '21212121-2121-4121-8121-212121212121',
+                'award',
+                '7',
+                $readyFile,
+                $goFile
+            );
+            $this->collectRejectedExperienceWorker($worker, 5, 'Unknown experience operation.');
+            $this->assertFileNotExists($readyFile);
+        } finally {
+            @unlink($readyFile);
+            @unlink($goFile);
+        }
+    }
+
+    public function testExperienceWorkerRejectsNonCanonicalAmountsBeforeBarrier()
+    {
+        foreach (['0', '-1', '7oops', '07', '2147483648'] as $index => $amount) {
+            $token = sys_get_temp_dir() . '/eckmar-experience-invalid-amount-' . $index . '-' . str_replace('.', '', uniqid('', true));
+            $readyFile = $token . '.ready';
+            $goFile = $token . '.go';
+
+            try {
+                $worker = $this->startExperienceWorker(
+                    '22222222-2222-4222-8222-222222222222',
+                    'grant',
+                    $amount,
+                    $readyFile,
+                    $goFile
+                );
+                $this->collectRejectedExperienceWorker(
+                    $worker,
+                    6,
+                    'Experience amount must be a canonical positive integer.'
+                );
+                $this->assertFileNotExists($readyFile);
+            } finally {
+                @unlink($readyFile);
+                @unlink($goFile);
+            }
+        }
+    }
+
+    public function testCheckoutOfferResolverLocksAndReturnsActiveOffer()
+    {
+        $productId = '23232323-2323-4323-8323-232323232323';
+        $offerId = '24242424-2424-4424-8424-242424242424';
+        DB::table('products')->insert(['id' => $productId]);
+        DB::table('offers')->insert([
+            'id' => $offerId,
+            'product_id' => $productId,
+            'min_quantity' => 1,
+            'price' => '10.00',
+            'deleted' => 0,
+        ]);
+
+        $resolved = DB::transaction(function () use ($offerId) {
+            return (new PurchasableOfferLockProbe($offerId))->resolve();
+        });
+
+        $this->assertSame($offerId, $resolved[0]->id);
+        $this->assertSame($productId, $resolved[1]->id);
+        $this->assertFalse((bool) $resolved[0]->deleted);
+    }
+
+    public function testCheckoutOfferResolverRequiresActiveTransaction()
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(
+            'Checkout offer resolution requires an active database transaction.'
+        );
+
+        (new PurchasableOfferLockProbe(
+            '30303030-3030-4030-8030-303030303030'
+        ))->resolve();
+    }
+
+    public function testCheckoutOfferResolverRejectsDeletedOfferBeforePaymentLogic()
+    {
+        $productId = '25252525-2525-4525-8525-252525252525';
+        $offerId = '26262626-2626-4626-8626-262626262626';
+        DB::table('products')->insert(['id' => $productId]);
+        DB::table('offers')->insert([
+            'id' => $offerId,
+            'product_id' => $productId,
+            'min_quantity' => 1,
+            'price' => '10.00',
+            'deleted' => 1,
+        ]);
+
+        try {
+            DB::transaction(function () use ($offerId) {
+                (new PurchasableOfferLockProbe($offerId))->resolve();
+            });
+            $this->fail('A deleted offer must not enter checkout payment logic.');
+        } catch (\App\Exceptions\RequestException $error) {
+            $this->assertSame(
+                'Selected offer is no longer available. Please add the product again.',
+                $error->getMessage()
+            );
+        }
+    }
+
+    public function testCheckoutOfferResolutionAndRemovalUseOneBoundedLockOrder()
+    {
+        $productId = '27272727-2727-4727-8727-272727272727';
+        $targetOfferId = '28282828-2828-4828-8828-282828282828';
+        $remainingOfferId = '29292929-2929-4929-8929-292929292929';
+        DB::table('products')->insert(['id' => $productId]);
+        DB::table('offers')->insert([
+            [
+                'id' => $targetOfferId,
+                'product_id' => $productId,
+                'min_quantity' => 1,
+                'price' => '10.00',
+                'deleted' => 0,
+            ],
+            [
+                'id' => $remainingOfferId,
+                'product_id' => $productId,
+                'min_quantity' => 2,
+                'price' => '9.00',
+                'deleted' => 0,
+            ],
+        ]);
+
+        $token = sys_get_temp_dir() . '/eckmar-checkout-offer-race-' . str_replace('.', '', uniqid('', true));
+        $removalReady = $token . '-removal.ready';
+        $removalGo = $token . '-removal.go';
+        $mutationHeld = $token . '-mutation-held';
+        $releaseRemoval = $token . '-release-removal';
+        $checkoutReady = $token . '-checkout.ready';
+        $checkoutGo = $token . '-checkout.go';
+        $checkoutDone = $token . '-checkout.done';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startHeldOfferRemovalWorker(
+                $productId,
+                '1',
+                $removalReady,
+                $removalGo,
+                $mutationHeld,
+                $releaseRemoval
+            );
+
+            $deadline = microtime(true) + 10;
+            while (!is_file($removalReady) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($removalReady);
+            $this->assertTrue(touch($removalGo));
+
+            $deadline = microtime(true) + 10;
+            while (!is_file($mutationHeld) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($mutationHeld);
+
+            $this->assertTrue(touch($checkoutGo));
+            $workers[] = $this->startCheckoutOfferWorker($targetOfferId, $checkoutReady, $checkoutGo, $checkoutDone);
+            $deadline = microtime(true) + 10;
+            while (!is_file($checkoutReady) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($checkoutReady);
+            usleep(100000);
+            $this->assertFileNotExists($checkoutDone, 'Checkout must wait while removal holds the product lock.');
+
+            $this->assertTrue(touch($releaseRemoval));
+
+            $removal = $this->collectOfferWorker($workers[0]);
+            $checkout = $this->collectOfferWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame('removed', $removal['status']);
+            $this->assertSame('rejected', $checkout['status']);
+            $this->assertSame(
+                'Selected offer is no longer available. Please add the product again.',
+                $checkout['message']
+            );
+            $this->assertFileExists($checkoutDone);
+            $this->assertTrue((bool) Offer::where('id', $targetOfferId)->value('deleted'));
+            $this->assertTrue(Offer::where('id', $remainingOfferId)->where('deleted', false)->exists());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($checkoutReady);
+            @unlink($checkoutGo);
+            @unlink($checkoutDone);
+            @unlink($removalReady);
+            @unlink($removalGo);
+            @unlink($mutationHeld);
+            @unlink($releaseRemoval);
+        }
+    }
+
+    public function testConcurrentFirstWalletRequestsResolveToOneMysqlRow()
+    {
+        $userId = '12121212-1212-4121-8121-121212121212';
+        DB::table('users')->insert(['id' => $userId]);
+        $token = sys_get_temp_dir() . '/eckmar-wallet-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startWalletWorker($userId, 'stb', $readyOne, $goFile);
+            $workers[] = $this->startWalletWorker($userId, 'stb', $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $first = $this->collectWalletWorker($workers[0]);
+            $second = $this->collectWalletWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame($first['wallet_id'], $second['wallet_id']);
+            $this->assertSame(1, DB::table('wallets')
+                ->where('user_id', $userId)->where('coin', 'stb')->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
+    public function testConcurrentNotificationReplayPersistsOneDelivery()
+    {
+        $userId = '17171717-1717-4171-8171-171717171717';
+        $deliveryKey = 'purchase-bought:18181818-1818-4181-8181-181818181818';
+        DB::table('users')->insert(['id' => $userId]);
+        $token = sys_get_temp_dir() . '/eckmar-notification-' . str_replace('.', '', uniqid('', true));
+        $readyOne = $token . '-one.ready';
+        $readyTwo = $token . '-two.ready';
+        $goFile = $token . '.go';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startNotificationWorker($userId, $deliveryKey, $readyOne, $goFile);
+            $workers[] = $this->startNotificationWorker($userId, $deliveryKey, $readyTwo, $goFile);
+
+            $deadline = microtime(true) + 10;
+            while ((!is_file($readyOne) || !is_file($readyTwo)) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($readyOne);
+            $this->assertFileExists($readyTwo);
+            $this->assertTrue(touch($goFile));
+
+            $first = $this->collectNotificationWorker($workers[0]);
+            $second = $this->collectNotificationWorker($workers[1]);
+            $workers = [];
+
+            $created = [$first['created'], $second['created']];
+            sort($created);
+            $this->assertSame([false, true], $created);
+            $this->assertSame(1, DB::table('notifications')
+                ->where('user_id', $userId)
+                ->where('route_name', 'profile.sales.single')
+                ->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($readyOne);
+            @unlink($readyTwo);
+            @unlink($goFile);
+        }
+    }
+
     public function testConcurrentProcessesApplySharedLedgerKeyOnlyOnce()
     {
         $service = new WalletLedgerService();
@@ -410,5 +1235,22 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         } catch (\App\Exceptions\RequestException $expected) {
             $this->assertSame('50', (string) $wallet->fresh()->available_atomic);
         }
+    }
+}
+
+class PurchasableOfferLockProbe
+{
+    use \App\Traits\Purchasable;
+
+    public $offer_id;
+
+    public function __construct($offerId)
+    {
+        $this->offer_id = $offerId;
+    }
+
+    public function resolve()
+    {
+        return $this->lockActiveOfferAndProduct();
     }
 }

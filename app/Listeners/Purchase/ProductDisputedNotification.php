@@ -26,45 +26,47 @@ class ProductDisputedNotification
      */
     public function handle(ProductDisputed $event)
     {
-        if ($event->initiator == $event->vendor->user){
+        if ($this->samePresentUserIdentifier($event->initiator, $event->vendor->user)){
             /**
              * Notify Buyer
              */
             $content = 'Purchase for a product you bought is being disputed';
             $routeName = 'profile.purchases.single';
             $routeParams = serialize(['purchase'=>$event->purchase->id]);
-            $this->notifyOnce($event->buyer, $content, $routeName, $routeParams);
+            $event->buyer->notifyOnce(
+                'dispute-opened-buyer:' . $event->purchase->id,
+                $content,
+                $routeName,
+                $routeParams
+            );
         }
 
-        if ($event->initiator == $event->buyer){
+        if ($this->samePresentUserIdentifier($event->initiator, $event->buyer)){
             /**
              * Notify vendor
              */
             $content = 'Purchase for a product you sold is being disputed';
             $routeName = 'profile.sales.single';
             $routeParams = serialize(['sale'=>$event->purchase->id]);
-            $this->notifyOnce($event->vendor->user, $content, $routeName, $routeParams);
+            $event->vendor->user->notifyOnce(
+                'dispute-opened-vendor:' . $event->purchase->id,
+                $content,
+                $routeName,
+                $routeParams
+            );
         }
     }
 
     /**
-     * Suppress a sequential replay after the notification was persisted.
-     *
-     * The description is part of the identity because several purchase
-     * lifecycle notifications intentionally share the same destination.
+     * Route notifications by persisted identity, not loaded model state.
      */
-    private function notifyOnce($user, $content, $routeName, $routeParams)
+    private function samePresentUserIdentifier($left, $right)
     {
-        $alreadyDelivered = $user->notifications()
-            ->where('description', $content)
-            ->where('route_name', $routeName)
-            ->where('route_params', $routeParams)
-            ->exists();
+        $leftId = $left->id;
+        $rightId = $right->id;
 
-        if ($alreadyDelivered) {
-            return;
-        }
-
-        $user->notify($content, $routeName, $routeParams);
+        return is_scalar($leftId) && is_scalar($rightId)
+            && (string) $leftId !== '' && (string) $rightId !== ''
+            && (string) $leftId === (string) $rightId;
     }
 }

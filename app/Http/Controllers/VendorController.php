@@ -19,6 +19,7 @@ use App\Image;
 use App\PhysicalProduct;
 use App\Product;
 use App\Purchase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 
@@ -154,18 +155,34 @@ class VendorController extends Controller
         $this -> authorizeEditOrCreate($product);
 
         try{
+            $validatedQuantity = filter_var($quantity, FILTER_VALIDATE_INT, [
+                'options' => ['min_range' => 1, 'max_range' => 2147483647],
+            ]);
+            if ($validatedQuantity === false || (string) $validatedQuantity !== (string) $quantity) {
+                throw new RequestException('The offer quantity must be a canonical positive integer.');
+            }
+            $quantity = $validatedQuantity;
+
             // old offers on products
             if ($product && $product->exists) {
-                $offersToRemove = $product->offers()->where('min_quantity', $quantity);
-                if (!$offersToRemove->exists()) {
-                    throw new RequestException('There is no offer for this quantity!');
-                }
+                DB::transaction(function () use ($product, $quantity) {
+                    // Use the same product-first lock order as offer creation so
+                    // concurrent removals cannot both delete the last active tier.
+                    $lockedProduct = Product::whereKey($product->getKey())
+                        ->lockForUpdate()
+                        ->firstOrFail();
 
-                if (!$product->offers()->where('min_quantity', '!=', $quantity)->exists()) {
-                    throw new RequestException('You must have at least one offer!');
-                }
+                    $offersToRemove = $lockedProduct->offers()->where('min_quantity', $quantity);
+                    if (!$offersToRemove->exists()) {
+                        throw new RequestException('There is no offer for this quantity!');
+                    }
 
-                $offersToRemove->update(['deleted' => 1]);
+                    if (!$lockedProduct->offers()->where('min_quantity', '!=', $quantity)->exists()) {
+                        throw new RequestException('You must have at least one offer!');
+                    }
+
+                    $offersToRemove->update(['deleted' => 1]);
+                });
                 session() -> flash('success', 'You have deleted offer!');
             }
             // new offers

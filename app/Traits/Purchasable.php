@@ -16,6 +16,7 @@ use App\Marketplace\Cart;
 use App\Shipping;
 use App\User;
 use App\Offer;
+use App\Product;
 
 
 use Illuminate\Support\Facades\DB;
@@ -35,8 +36,7 @@ trait Purchasable {
             throw new RequestException('Selected shipping is deleted, please add the product again.');
         }
 
-        $offer = Offer::where('id', $this->offer_id)->lockForUpdate()->firstOrFail();
-        $product = $offer->product()->lockForUpdate()->firstOrFail();
+        list($offer, $product) = $this->lockActiveOfferAndProduct();
         throw_unless($product->active, new RequestException('This product is no longer available.'));
         $offer->setRelation('product', $product);
         $this->setRelation('offer', $offer);
@@ -67,6 +67,45 @@ trait Purchasable {
             $this -> delivered_product = implode("\n", $productsToDelivery);
             $this -> save();
         }
+    }
+
+    /**
+     * Lock checkout inventory in the same Product -> Offer order used by
+     * offer creation and removal. The second offer read closes the gap between
+     * discovering the owning product and acquiring its serialization lock.
+     */
+    protected function lockActiveOfferAndProduct()
+    {
+        if (DB::connection()->transactionLevel() < 1) {
+            throw new \LogicException(
+                'Checkout offer resolution requires an active database transaction.'
+            );
+        }
+
+        $offerReference = Offer::where('id', $this->offer_id)
+            ->select(['id', 'product_id'])
+            ->first();
+        if (!$offerReference) {
+            throw new RequestException('Selected offer is no longer available. Please add the product again.');
+        }
+
+        $product = Product::where('id', $offerReference->product_id)
+            ->lockForUpdate()
+            ->first();
+        if (!$product) {
+            throw new RequestException('Selected offer is no longer available. Please add the product again.');
+        }
+
+        $offer = Offer::where('id', $this->offer_id)
+            ->where('product_id', $product->id)
+            ->where('deleted', '=', 0)
+            ->lockForUpdate()
+            ->first();
+        if (!$offer) {
+            throw new RequestException('Selected offer is no longer available. Please add the product again.');
+        }
+
+        return [$offer, $product];
     }
 
     private function markingAsSent(){

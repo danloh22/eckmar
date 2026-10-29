@@ -38,7 +38,6 @@ class MakePurchasesRequest extends FormRequest
 
     public function persist(WalletLedgerService $ledger = null)
     {
-        $ledger = $ledger ?: app(WalletLedgerService::class);
         $purchases = [];
         $items = [];
         $transactionCompleted = false;
@@ -56,24 +55,37 @@ class MakePurchasesRequest extends FormRequest
                 $purchase->setRelations([]);
                 return $purchase;
             }, $items);
-            // Do not automatically retry this closure: rollback does not reset the
-            // captured Eloquent models' exists/attributes or the purchases list.
-            // Reusing them after a deadlock could update an insert that rolled back.
-            DB::transaction(function () use ($items, $ledger, &$purchases) {
-                foreach ($items as $item) {
-                    $item->purchased();
-                    $item->save();
-                    $ledger->reservePurchase($item);
-                    $purchases[] = $item;
-                }
-            });
-            $transactionCompleted = true;
-            // Clear cart after commiting
-            $this->clearCheckoutCart();
+            $this->assertStableCheckoutIdentities($items);
+            // A sequential retry may arrive after the first request committed but
+            // before its session cart was cleared. Recover that complete result
+            // before payment, inventory or ledger work can be repeated.
+            $recovered = $this->recoverCommittedCheckout($items);
+            if ($recovered !== null) {
+                $purchases = $recovered;
+                $this->clearCheckoutCart();
+            } else {
+                // Resolve the ledger only after the cart and its recovery identities
+                // have passed the side-effect-free preflight.
+                $ledger = $ledger ?: app(WalletLedgerService::class);
+                // Do not automatically retry this closure: rollback does not reset the
+                // captured Eloquent models' exists/attributes or the purchases list.
+                // Reusing them after a deadlock could update an insert that rolled back.
+                DB::transaction(function () use ($items, $ledger, &$purchases) {
+                    foreach ($items as $item) {
+                        $item->purchased();
+                        $item->save();
+                        $ledger->reservePurchase($item);
+                        $purchases[] = $item;
+                    }
+                });
+                $transactionCompleted = true;
+                // Clear cart after committing.
+                $this->clearCheckoutCart();
+            }
         }
         catch(RequestException $requestException){
             Log::error($requestException -> getMessage());
-            throw new RequestException($requestException -> getMessage());
+            throw $requestException;
         }
         catch (\Exception $e){
             Log::error($e -> getMessage());
@@ -82,7 +94,10 @@ class MakePurchasesRequest extends FormRequest
             // after a duplicate-key signal that can represent a prior request
             // committing the same stable purchase UUIDs. Deadlocks and other
             // definite pre-commit failures retain the normal error path.
-            if (!$transactionCompleted && !$this->isDuplicateIdentityFailure($e)) {
+            if (!$transactionCompleted
+                && !$this->isDuplicateIdentityFailure($e)
+                && !$this->isAmbiguousCommitFailure($e)
+            ) {
                 throw new RequestException('Error happened! Try again later!');
             }
 
@@ -123,6 +138,82 @@ class MakePurchasesRequest extends FormRequest
     protected function clearCheckoutCart()
     {
         Cart::getCart()->clearCart();
+    }
+
+    /**
+     * Recovery is keyed by the purchase UUID. Reject a corrupted session cart
+     * before opening a transaction so one committed row can never satisfy two
+     * cart entries during duplicate-key or ambiguous-commit recovery.
+     *
+     * @param array $items
+     * @throws RequestException
+     */
+    protected function assertStableCheckoutIdentities(array $items)
+    {
+        $seen = [];
+        foreach ($items as $item) {
+            $id = $item->getAttribute('id');
+            if (!is_string($id) || $id === '' || trim($id) !== $id || isset($seen[$id])) {
+                throw new RequestException(
+                    'Checkout identity is missing or duplicated. Please rebuild your cart.'
+                );
+            }
+            $quantity = $item->getAttribute('quantity');
+            if (!is_int($quantity) || $quantity < 1) {
+                throw new RequestException(
+                    'Checkout quantity is invalid. Please rebuild your cart.'
+                );
+            }
+            foreach (['buyer_id', 'vendor_id', 'offer_id', 'coin_name', 'type'] as $attribute) {
+                $value = $item->getAttribute($attribute);
+                if (!is_string($value) || $value === '' || trim($value) !== $value) {
+                    throw new RequestException(
+                        'Checkout recovery identity is invalid. Please rebuild your cart.'
+                    );
+                }
+            }
+            if (!array_key_exists($item->getAttribute('coin_name'), config('coins.coin_list', []))
+                || !array_key_exists($item->getAttribute('type'), Purchase::$types)
+            ) {
+                throw new RequestException(
+                    'Checkout recovery identity is invalid. Please rebuild your cart.'
+                );
+            }
+            $shippingId = $item->getAttribute('shipping_id');
+            if ($shippingId !== null
+                && (!is_string($shippingId) || $shippingId === '' || trim($shippingId) !== $shippingId)
+            ) {
+                throw new RequestException(
+                    'Checkout recovery identity is invalid. Please rebuild your cart.'
+                );
+            }
+            $seen[$id] = true;
+        }
+
+        $buyerId = $this->currentCheckoutBuyerId();
+        if (!is_string($buyerId) || $buyerId === '' || trim($buyerId) !== $buyerId) {
+            throw new RequestException(
+                'Checkout recovery identity is invalid. Please rebuild your cart.'
+            );
+        }
+        foreach ($items as $item) {
+            if ($item->getAttribute('buyer_id') !== $buyerId) {
+                throw new RequestException(
+                    'Checkout recovery identity is invalid. Please rebuild your cart.'
+                );
+            }
+        }
+    }
+
+    /**
+     * Bind checkout recovery to the authenticated profile route identity.
+     *
+     * Kept behind a boundary so isolated tests can provide a trusted identity
+     * without bootstrapping an authentication provider.
+     */
+    protected function currentCheckoutBuyerId()
+    {
+        return auth()->id();
     }
 
     /**
@@ -174,22 +265,96 @@ class MakePurchasesRequest extends FormRequest
 
     protected function isDuplicateIdentityFailure(\Exception $exception)
     {
-        $code = (string) $exception->getCode();
-        $message = strtolower($exception->getMessage());
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            $errorInfo = property_exists($current, 'errorInfo') && is_array($current->errorInfo)
+                ? $current->errorInfo
+                : [];
+            $sqlState = isset($errorInfo[0]) ? (string) $errorInfo[0] : (string) $current->getCode();
+            $driverCode = isset($errorInfo[1]) ? (string) $errorInfo[1] : '';
+            $message = strtolower($current->getMessage());
 
-        return in_array($code, ['23000', '23505'], true)
-            || strpos($message, 'duplicate entry') !== false
-            || strpos($message, 'unique constraint failed') !== false;
+            if (($sqlState === '23000'
+                    && $driverCode === '1062'
+                    && (strpos($message, "for key 'primary'") !== false
+                        || strpos($message, "for key 'purchases.primary'") !== false
+                        || strpos($message, 'for key `primary`') !== false
+                        || strpos($message, 'for key `purchases.primary`') !== false
+                        || strpos($message, 'for key primary') !== false
+                        || strpos($message, 'for key purchases.primary') !== false))
+                || ($sqlState === '23505'
+                    && strpos($message, 'purchases_pkey') !== false)
+                || ($sqlState === '23000'
+                    && $driverCode === '19'
+                    && strpos($message, 'unique constraint failed: purchases.id') !== false)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine whether the database may have disconnected while COMMIT was in flight.
+     *
+     * Recovery remains read-only: it never replays the transaction. A disconnect can
+     * also happen before commit, in which case no matching rows are found and checkout
+     * fails normally. Partial or conflicting rows still fail closed.
+     */
+    protected function isAmbiguousCommitFailure(\Exception $exception)
+    {
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            $errorInfo = property_exists($current, 'errorInfo') && is_array($current->errorInfo)
+                ? $current->errorInfo
+                : [];
+            $sqlState = isset($errorInfo[0]) ? (string) $errorInfo[0] : (string) $current->getCode();
+            $driverCode = isset($errorInfo[1]) ? (string) $errorInfo[1] : '';
+
+            if (strpos($sqlState, '08') === 0
+                || ($sqlState === 'HY000' && in_array($driverCode, ['2006', '2013'], true))
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function sameCheckoutIdentity(Purchase $requested, Purchase $committed)
     {
-        foreach (['buyer_id', 'vendor_id', 'offer_id', 'shipping_id', 'coin_name', 'type'] as $attribute) {
-            if ((string) $requested->getAttribute($attribute) !== (string) $committed->getAttribute($attribute)) {
+        foreach (['buyer_id', 'vendor_id', 'offer_id', 'coin_name', 'type'] as $attribute) {
+            $value = $committed->getAttribute($attribute);
+            if (!is_string($value) || $value === '' || trim($value) !== $value
+                || $requested->getAttribute($attribute) !== $value
+            ) {
                 return false;
             }
         }
 
-        return (int) $requested->getAttribute('quantity') === (int) $committed->getAttribute('quantity');
+        $shippingId = $committed->getAttribute('shipping_id');
+        if ($shippingId !== null
+            && (!is_string($shippingId) || $shippingId === '' || trim($shippingId) !== $shippingId)
+        ) {
+            return false;
+        }
+        if ($requested->getAttribute('shipping_id') !== $shippingId) {
+            return false;
+        }
+
+        $quantity = $committed->getAttribute('quantity');
+        if (is_string($quantity)) {
+            if (!preg_match('/^[1-9][0-9]*$/D', $quantity)) {
+                return false;
+            }
+            $integerQuantity = (int) $quantity;
+            if ((string) $integerQuantity !== $quantity) {
+                return false;
+            }
+            $quantity = $integerQuantity;
+        }
+
+        return is_int($quantity)
+            && $quantity > 0
+            && $requested->getAttribute('quantity') === $quantity;
     }
 }

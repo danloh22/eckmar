@@ -38,7 +38,7 @@ class CheckoutTransactionRetryTest extends TestCase
             return $callback();
         });
 
-        (new MakePurchasesRequest())->persist($ledger);
+        (new CheckoutNoRecoveryRequestDouble())->persist($ledger);
 
         $this->assertCount(1, $reserved);
         $this->assertNotSame($purchase, $reserved[0]);
@@ -73,7 +73,7 @@ class CheckoutTransactionRetryTest extends TestCase
         });
 
         // No exception is expected on the successful checkout path.
-        (new MakePurchasesRequest())->persist($ledger);
+        (new CheckoutNoRecoveryRequestDouble())->persist($ledger);
         $this->assertSame(1, $transactionCount);
         $this->assertSame(1, $reservationCount);
         $this->assertEmpty(Cart::getCart()->items());
@@ -96,6 +96,367 @@ class CheckoutTransactionRetryTest extends TestCase
         }
 
         Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function testEmptyCartDoesNotResolveLedgerService()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Add at least one product before opening checkout.');
+        session()->forget(Cart::SESSION_NAME);
+        app()->bind(WalletLedgerService::class, function () {
+            throw new \RuntimeException('Ledger service must not be resolved for an empty cart.');
+        });
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new CheckoutNoRecoveryRequestDouble())->persist();
+            $this->fail('Empty cart must fail before resolving the ledger service.');
+        } catch (RequestException $exception) {
+            $this->assertSame('Add at least one product before opening checkout.', $exception->getMessage());
+        }
+
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function testDuplicatePurchaseIdsAreRejectedBeforeOpeningTransaction()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout identity is missing or duplicated. Please rebuild your cart.'
+        );
+
+        $first = new CheckoutPurchaseDouble();
+        $first->id = 'duplicate-purchase-id';
+        $second = new CheckoutPurchaseDouble();
+        $second->id = 'duplicate-purchase-id';
+        session()->put(Cart::SESSION_NAME, [
+            'first-product' => $first,
+            'second-product' => $second,
+        ]);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist($ledger);
+            $this->fail('Duplicate checkout identities must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout identity is missing or duplicated. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($first, session()->get(Cart::SESSION_NAME)['first-product']);
+        $this->assertSame($second, session()->get(Cart::SESSION_NAME)['second-product']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    /**
+     * @dataProvider invalidCheckoutIdentityValues
+     */
+    public function testMissingOrNonStringPurchaseIdIsRejectedBeforeOpeningTransaction($invalidId)
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout identity is missing or duplicated. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->setAttribute('id', $invalidId);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist($ledger);
+            $this->fail('Unstable checkout identity must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout identity is missing or duplicated. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    /**
+     * @dataProvider invalidCheckoutQuantityValues
+     */
+    public function testInvalidPurchaseQuantityIsRejectedBeforeOpeningTransaction($invalidQuantity)
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout quantity is invalid. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'invalid-quantity-purchase-id';
+        $purchase->setAttribute('quantity', $invalidQuantity);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist($ledger);
+            $this->fail('Invalid checkout quantity must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout quantity is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function testInvalidCartDoesNotResolveLedgerService()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout identity is missing or duplicated. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = '';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+        app()->bind(WalletLedgerService::class, function () {
+            throw new \RuntimeException('Ledger service must not be resolved for an invalid cart.');
+        });
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist();
+            $this->fail('Invalid cart must fail before resolving the ledger service.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout identity is missing or duplicated. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function testLedgerResolutionFailureIsNormalizedBeforeTransaction()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Ledger service unavailable');
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'valid-purchase-id';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+        app()->bind(WalletLedgerService::class, function () {
+            throw new \RuntimeException('Ledger service unavailable');
+        });
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new CheckoutNoRecoveryRequestDouble())->persist();
+            $this->fail('Ledger resolution failure must stop checkout.');
+        } catch (RequestException $exception) {
+            $this->assertSame('Error happened! Try again later!', $exception->getMessage());
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function testCheckoutRequestExceptionPreservesOriginalContext()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Known checkout failure.');
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'context-purchase-id';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $previous = new \RuntimeException('Original cause');
+        $expected = new RequestException('Known checkout failure.', 409, $previous);
+        $request = new CheckoutPreflightFailureRequestDouble($expected);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Known checkout failure must be rethrown.');
+        } catch (RequestException $exception) {
+            $this->assertSame($expected, $exception);
+            $this->assertSame(409, $exception->getCode());
+            $this->assertSame($previous, $exception->getPrevious());
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function invalidCheckoutIdentityValues()
+    {
+        return [
+            'missing' => [null],
+            'empty' => [''],
+            'whitespace' => [' purchase-id '],
+            'integer' => [42],
+            'array' => [['purchase-id']],
+        ];
+    }
+
+    public function invalidCheckoutQuantityValues()
+    {
+        return [
+            'missing' => [null],
+            'zero' => [0],
+            'negative' => [-1],
+            'numeric string' => ['1'],
+            'numeric suffix' => ['1oops'],
+            'fractional' => [1.5],
+        ];
+    }
+
+    /**
+     * @dataProvider invalidCheckoutRecoveryIdentityValues
+     */
+    public function testInvalidRecoveryIdentityIsRejectedBeforeLookupOrLedgerResolution(
+        $attribute,
+        $invalidValue
+    ) {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout recovery identity is invalid. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'invalid-recovery-identity-id';
+        $purchase->setAttribute($attribute, $invalidValue);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $request = new CheckoutRecoveryProbeRequestDouble();
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Invalid recovery identity must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout recovery identity is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function invalidCheckoutRecoveryIdentityValues()
+    {
+        return [
+            'missing buyer' => ['buyer_id', null],
+            'non-string vendor' => ['vendor_id', 42],
+            'empty offer' => ['offer_id', ''],
+            'whitespace coin' => ['coin_name', ' btc '],
+            'unsupported coin' => ['coin_name', 'unsupported-coin'],
+            'non-string purchase type' => ['type', ['normal']],
+            'unsupported purchase type' => ['type', 'unsupported-type'],
+            'empty shipping' => ['shipping_id', ''],
+            'whitespace shipping' => ['shipping_id', ' shipping-id '],
+            'non-string shipping' => ['shipping_id', 42],
+        ];
+    }
+
+    /**
+     * @dataProvider invalidAuthenticatedBuyerValues
+     */
+    public function testCheckoutRejectsMissingOrMismatchedAuthenticatedBuyerBeforeRecovery(
+        $authenticatedBuyerId
+    ) {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout recovery identity is invalid. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'authenticated-buyer-preflight-id';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $request = new CheckoutRecoveryProbeRequestDouble();
+        $request->checkoutBuyerId = $authenticatedBuyerId;
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Checkout must be bound to the authenticated buyer.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout recovery identity is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function invalidAuthenticatedBuyerValues()
+    {
+        return [
+            'missing authenticated buyer' => [null],
+            'different authenticated buyer' => ['other-buyer-id'],
+        ];
+    }
+
+    public function testSequentialRetryRecoversBeforeTransactionOrLedgerReservation()
+    {
+        Event::fake([NewPurchase::class]);
+
+        $purchase = new Purchase();
+        $purchase->id = 'sequential-retry-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->exists = true;
+        $committed->setRelation('buyer', (object) ['id' => 'buyer-id']);
+        $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
+        $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
+
+        $request = new CheckoutRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        $request->persist($ledger);
+
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertDispatched(NewPurchase::class, function (NewPurchase $event) use ($committed) {
+            return $event->purchase->id === $committed->id;
+        });
     }
 
     public function testAmbiguousCommitRecoversMatchingPersistedPurchases()
@@ -121,12 +482,14 @@ class CheckoutTransactionRetryTest extends TestCase
         $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
         $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
 
-        $request = new CheckoutRecoveryRequestDouble();
+        $request = new CheckoutPostFailureRecoveryRequestDouble();
         $request->committedPurchases[$purchase->id] = $committed;
 
         $ledger = Mockery::mock(WalletLedgerService::class);
         $ledger->shouldNotReceive('reservePurchase');
-        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000));
+        $duplicate = new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000);
+        $duplicate->errorInfo = ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY'];
+        DB::shouldReceive('transaction')->once()->andThrow($duplicate);
 
         $request->persist($ledger);
 
@@ -134,6 +497,113 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertDispatched(NewPurchase::class, function (NewPurchase $event) use ($committed) {
             return $event->purchase === $committed;
         });
+    }
+
+    /**
+     * @dataProvider ambiguousCommitDatabaseErrors
+     */
+    public function testAmbiguousCommitClassifierAcceptsOnlyConnectionLosses(
+        $sqlState,
+        $driverCode,
+        $expected
+    ) {
+        $exception = new \PDOException('database connection outcome', 0);
+        $exception->errorInfo = [$sqlState, $driverCode, 'database connection outcome'];
+
+        $method = new \ReflectionMethod(MakePurchasesRequest::class, 'isAmbiguousCommitFailure');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            $expected,
+            $method->invoke(new MakePurchasesRequest(), $exception)
+        );
+    }
+
+    public function ambiguousCommitDatabaseErrors()
+    {
+        return [
+            'standard connection failure' => ['08006', 7, true],
+            'mysql server gone away' => ['HY000', 2006, true],
+            'mysql lost connection' => ['HY000', 2013, true],
+            'mysql deadlock' => ['40001', 1213, false],
+            'mysql lock timeout' => ['HY000', 1205, false],
+            'mysql generic error' => ['HY000', 1105, false],
+        ];
+    }
+
+    public function testAmbiguousDisconnectRecoversCommittedPurchasesWithoutReplay()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Lost connection during COMMIT');
+
+        $purchase = new Purchase();
+        $purchase->id = 'disconnect-recovery-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->exists = true;
+        $committed->setRelation('buyer', (object) ['id' => 'buyer-id']);
+        $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
+        $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
+
+        $request = new CheckoutPostFailureRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        $disconnect = new \PDOException('Lost connection during COMMIT', 0);
+        $disconnect->errorInfo = ['HY000', 2013, 'Lost connection during COMMIT'];
+        DB::shouldReceive('transaction')->once()->andThrow($disconnect);
+
+        $request->persist($ledger);
+
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertDispatched(NewPurchase::class, 1);
+        Event::assertDispatched(NewPurchase::class, function (NewPurchase $event) use ($committed) {
+            return $event->purchase === $committed;
+        });
+    }
+
+    public function testAmbiguousDisconnectWithoutCommittedRowsFailsWithoutReplay()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Lost connection before COMMIT');
+
+        $purchase = new Purchase();
+        $purchase->id = 'uncommitted-disconnect-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->quantity = 1;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $request = new CheckoutRecoveryRequestDouble();
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        $disconnect = new \PDOException('Lost connection before COMMIT', 0);
+        $disconnect->errorInfo = ['08006', 7, 'Lost connection before COMMIT'];
+        DB::shouldReceive('transaction')->once()->andThrow($disconnect);
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Uncommitted ambiguous checkout must fail without replay.');
+        } catch (RequestException $exception) {
+            $this->assertSame('Error happened! Try again later!', $exception->getMessage());
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
     }
 
     public function testAmbiguousCommitFailsClosedOnConflictingIdentity()
@@ -157,12 +627,14 @@ class CheckoutTransactionRetryTest extends TestCase
         $committed->buyer_id = 'different-buyer-id';
         $committed->exists = true;
 
-        $request = new CheckoutRecoveryRequestDouble();
+        $request = new CheckoutPostFailureRecoveryRequestDouble();
         $request->committedPurchases[$purchase->id] = $committed;
 
         $ledger = Mockery::mock(WalletLedgerService::class);
         $ledger->shouldNotReceive('reservePurchase');
-        DB::shouldReceive('transaction')->once()->andThrow(new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000));
+        $duplicate = new \PDOException('Duplicate entry for key purchases.PRIMARY', 23000);
+        $duplicate->errorInfo = ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY'];
+        DB::shouldReceive('transaction')->once()->andThrow($duplicate);
 
         try {
             $request->persist($ledger);
@@ -173,6 +645,102 @@ class CheckoutTransactionRetryTest extends TestCase
 
         $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
         Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    /**
+     * @dataProvider invalidCommittedRecoveryIdentityValues
+     */
+    public function testSequentialRecoveryRejectsNonCanonicalCommittedIdentity(
+        $attribute,
+        $requestedValue,
+        $committedValue
+    ) {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout status is inconsistent. Please contact support.'
+        );
+
+        $purchase = new Purchase();
+        $purchase->id = 'noncanonical-committed-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        $purchase->setAttribute($attribute, $requestedValue);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->setAttribute($attribute, $committedValue);
+        $committed->exists = true;
+
+        $request = new CheckoutRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Non-canonical committed recovery identity must fail closed.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout status is inconsistent. Please contact support.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function invalidCommittedRecoveryIdentityValues()
+    {
+        return [
+            'missing persisted buyer' => ['buyer_id', 'buyer-id', null],
+            'empty persisted shipping aliases null under string cast' => ['shipping_id', null, ''],
+            'numeric persisted coin aliases string under cast' => ['coin_name', '42', 42],
+            'quantity suffix aliases integer under cast' => ['quantity', 2, '2oops'],
+            'zero-padded quantity is non-canonical' => ['quantity', 2, '02'],
+        ];
+    }
+
+    public function testSequentialRecoveryAcceptsCanonicalDatabaseQuantityString()
+    {
+        Event::fake([NewPurchase::class]);
+
+        $purchase = new Purchase();
+        $purchase->id = 'canonical-quantity-recovery-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->quantity = '2';
+        $committed->exists = true;
+        $committed->setRelation('buyer', (object) ['id' => 'buyer-id']);
+        $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
+        $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
+
+        $request = new CheckoutRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        $request->persist($ledger);
+
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertDispatched(NewPurchase::class, 1);
     }
 
     public function testPostCommitSessionClearFailureRecoversWithoutRepeatingReservation()
@@ -217,6 +785,46 @@ class CheckoutTransactionRetryTest extends TestCase
         });
     }
 
+    /**
+     * @dataProvider duplicateIdentityDatabaseErrors
+     */
+    public function testDuplicateRecoveryOnlyAcceptsUniqueConstraintErrors(
+        $sqlState,
+        $driverCode,
+        $message,
+        $expected
+    ) {
+        $exception = new \PDOException($message, (int) $sqlState);
+        $exception->errorInfo = [$sqlState, $driverCode, $message];
+
+        $method = new \ReflectionMethod(MakePurchasesRequest::class, 'isDuplicateIdentityFailure');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            $expected,
+            $method->invoke(new MakePurchasesRequest(), $exception)
+        );
+    }
+
+    public function duplicateIdentityDatabaseErrors()
+    {
+        return [
+            'mysql purchase primary key' => ['23000', 1062, "Duplicate entry 'purchase-id' for key 'purchases.PRIMARY'", true],
+            'mysql unqualified primary key' => ['23000', 1062, "Duplicate entry 'purchase-id' for key 'PRIMARY'", true],
+            'mysql unquoted qualified primary key' => ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY', true],
+            'mysql backtick primary key' => ['23000', 1062, 'Duplicate entry purchase-id for key `purchases.PRIMARY`', true],
+            'postgres purchase primary key' => ['23505', 7, 'duplicate key value violates unique constraint "purchases_pkey"', true],
+            'sqlite purchase primary key' => ['23000', 19, 'UNIQUE constraint failed: purchases.id', true],
+            'mysql unrelated unique key' => ['23000', 1062, "Duplicate entry 'buyer-btc' for key 'wallets.user_id_coin_unique'", false],
+            'postgres unrelated unique key' => ['23505', 7, 'duplicate key value violates unique constraint "wallets_user_coin_key"', false],
+            'sqlite unrelated unique key' => ['23000', 19, 'UNIQUE constraint failed: wallets.user_id, wallets.coin', false],
+            'deadlock with duplicate-like text' => ['40001', 1213, 'Deadlock after duplicate entry diagnostic', false],
+            'misleading sqlite-like message' => ['HY000', 5, 'unique constraint failed while handling I/O', false],
+            'mysql foreign key' => ['23000', 1452, 'Cannot add or update a child row', false],
+            'mysql deadlock' => ['40001', 1213, 'Deadlock found when trying to get lock', false],
+        ];
+    }
+
     public function testFailedCheckoutsDoNotReplayOrMutateTheSessionPurchase()
     {
         Event::fake([NewPurchase::class]);
@@ -257,7 +865,7 @@ class CheckoutTransactionRetryTest extends TestCase
         for ($request = 0; $request < 2; $request++) {
             $failure = null;
             try {
-                (new MakePurchasesRequest())->persist($ledger);
+                (new CheckoutNoRecoveryRequestDouble())->persist($ledger);
             } catch (RequestException $exception) {
                 $failure = $exception;
             }
@@ -291,6 +899,18 @@ class CheckoutPurchaseDouble extends Purchase
 {
     public static $startingStates = [];
 
+    public function __construct()
+    {
+        parent::__construct();
+        $this->buyer_id = 'buyer-id';
+        $this->vendor_id = 'vendor-id';
+        $this->offer_id = 'offer-id';
+        $this->shipping_id = null;
+        $this->quantity = 1;
+        $this->coin_name = 'btc';
+        $this->type = 'normal';
+    }
+
     public function purchased()
     {
         self::$startingStates[] = [$this->exists, $this->message, $this->getRelations()];
@@ -299,6 +919,8 @@ class CheckoutPurchaseDouble extends Purchase
         if ($this->relationLoaded('offer')) {
             $this->getRelation('offer')->title = 'mutated cached offer';
         }
+        $this->setRelation('buyer', (object) ['id' => $this->buyer_id]);
+        $this->setRelation('vendor', (object) ['id' => $this->vendor_id]);
         $this->setRelation('offer', (object) ['title' => 'fresh offer', 'product' => (object) ['id' => 'product-id']]);
     }
 
@@ -310,7 +932,17 @@ class CheckoutPurchaseDouble extends Purchase
 }
 
 
-class CheckoutRecoveryRequestDouble extends MakePurchasesRequest
+class CheckoutAuthenticatedRequestDouble extends MakePurchasesRequest
+{
+    public $checkoutBuyerId = 'buyer-id';
+
+    protected function currentCheckoutBuyerId()
+    {
+        return $this->checkoutBuyerId;
+    }
+}
+
+class CheckoutRecoveryRequestDouble extends CheckoutAuthenticatedRequestDouble
 {
     public $committedPurchases = [];
 
@@ -320,7 +952,41 @@ class CheckoutRecoveryRequestDouble extends MakePurchasesRequest
     }
 }
 
-class SessionClearFailureRequestDouble extends CheckoutRecoveryRequestDouble
+class CheckoutRecoveryProbeRequestDouble extends CheckoutAuthenticatedRequestDouble
+{
+    public $recoveryCalls = 0;
+
+    protected function recoverCommittedCheckout(array $items)
+    {
+        $this->recoveryCalls++;
+        return null;
+    }
+}
+
+class CheckoutNoRecoveryRequestDouble extends CheckoutAuthenticatedRequestDouble
+{
+    protected function recoverCommittedCheckout(array $items)
+    {
+        return null;
+    }
+}
+
+class CheckoutPostFailureRecoveryRequestDouble extends CheckoutRecoveryRequestDouble
+{
+    private $recoveryCalls = 0;
+
+    protected function recoverCommittedCheckout(array $items)
+    {
+        $this->recoveryCalls++;
+        if ($this->recoveryCalls === 1) {
+            return null;
+        }
+
+        return parent::recoverCommittedCheckout($items);
+    }
+}
+
+class SessionClearFailureRequestDouble extends CheckoutPostFailureRecoveryRequestDouble
 {
     public $clearAttempts = 0;
 
@@ -332,5 +998,20 @@ class SessionClearFailureRequestDouble extends CheckoutRecoveryRequestDouble
         }
 
         parent::clearCheckoutCart();
+    }
+}
+
+class CheckoutPreflightFailureRequestDouble extends CheckoutAuthenticatedRequestDouble
+{
+    private $failure;
+
+    public function __construct(RequestException $failure)
+    {
+        $this->failure = $failure;
+    }
+
+    protected function assertStableCheckoutIdentities(array $items)
+    {
+        throw $this->failure;
     }
 }

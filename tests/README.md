@@ -81,3 +81,45 @@ GitHub Actions run [39841904670](https://github.com/danloh22/eckmar/actions/runs
 - **External integrations:** Exercise wallet daemon/RPC connectivity, deposits, withdrawals, escrow settlement, coin-rate API failure handling, messaging, and search indexing against isolated test services or mocks. Do not use live funds, live wallet credentials, or production endpoints.
 - **Deployment controls:** Verify secret management, `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, restricted admin access, worker/scheduler configuration, durable storage, backups, restoration drills, monitoring, and rollback on a separate staging environment.
 - **Release decision:** PR #3 remains a draft until the above checks are evidenced. Do not equate green PHPUnit CI with a production approval or deploy automatically.
+
+
+## Atomic experience-update regression — 27 October 2026
+
+The `Experience` trait now delegates grants and deductions to Eloquent's database-side `increment` and `decrement` operations, checks that exactly one row changed, and refreshes the model only after success. `ExperienceAtomicUpdateTest` covers both operations and the zero-row failure path; the Python source contract rejects the former read-modify-save sequence.
+
+This prevents lost deltas between concurrent workers, but it does not deduplicate a replayed business event. A durable event identity remains necessary before an identical reward or deduction can be proven exactly-once. No live database, wallet RPC, funds, migration or production endpoint is used by this test batch.
+
+
+## Disposable-MySQL concurrent experience regression — 28 October 2026
+
+The MySQL integration suite now starts two independent PHP processes that both load the same vendor before a shared barrier and then grant different XP deltas. Starting at 100 XP, the final database value must be 118 after grants of 7 and 11. This would expose the former stale-model read-modify-save race while exercising the database-side atomic increment used by the current trait.
+
+The test uses only the disposable CI MySQL service and a minimal test-only vendors table. It does not contact wallets, payment services or production systems. It still does not make replayed business events idempotent.
+
+The same harness also runs a mixed-operation race: one stale worker grants 11 XP while another takes 7 XP from a starting value of 100. The final value must be 104. The worker accepts only the explicit operations `grant` and `take`; any other operation fails closed. This covers concurrent database-side decrement behavior but does not provide business-event replay identity.
+
+The experience worker also validates its amount as a canonical positive 32-bit integer. Runtime regressions reject unknown operations and amounts such as `0`, `-1`, `7oops`, `07` and overflow before a readiness file can be created. These checks protect the disposable test contract; they do not alter production XP semantics.
+
+The disposable MySQL suite also calls checkout's production offer resolver without entering payment logic. It verifies the shared Product -> Offer lock order, accepts an active offer, and rejects a soft-deleted offer before any payment or inventory work. This reduces checkout/offer-edit deadlock risk and prevents stale cart entries from purchasing removed tiers.
+
+A separate deterministic two-process regression holds persisted offer removal after its update and before commit, then starts the production checkout resolver while the product lock is still held. Checkout must wait, then reject the committed soft-deleted tier; database deadlocks, uncaught lock failures and an active removed tier fail the test. The checkout worker does not construct payment or wallet services.
+
+The production resolver also rejects calls made outside an active database transaction before issuing its first query. This keeps its Product -> Offer `FOR UPDATE` contract from silently degrading under a future internal caller or refactor; the normal checkout and disposable workers already run it inside `DB::transaction()`.
+
+`CheckoutTransactionRetryTest` also rejects a corrupt session cart before ledger service resolution, any transaction, reservation or `NewPurchase` event when a purchase ID is missing, non-string, blank, whitespace-padded or duplicated under different cart keys. This protects read-only ambiguous-commit recovery from counting the same committed purchase twice and keeps invalid-cart rejection independent of wallet/ledger initialization. It does not replace the pending durable, buyer-bound checkout request key.
+
+The same suite now proves that an empty cart also fails before resolving `WalletLedgerService` from the application container. The regression opens no transaction and dispatches no purchase event; it does not construct a wallet service or perform any wallet/RPC operation.
+
+Known checkout `RequestException` instances are also rethrown unchanged after logging. The regression preserves the exact exception object, status code and previous cause while proving no transaction, reservation or purchase event occurs and the session cart remains intact.
+
+Checkout preflight also requires a positive native-integer quantity. Missing, zero, negative, fractional and numeric-string quantities fail before ledger resolution, transaction, reservation or event dispatch, and the corrupt session cart remains available for explicit recovery. This avoids permissive integer casts aliasing distinct corrupt inputs during ambiguous-commit comparison; it does not replace the pending durable buyer-bound request key.
+
+A sequential retry now checks the stable purchase IDs against committed rows immediately after the side-effect-free identity preflight. When every row exists and matches, checkout clears the stale cart and emits the existing recovery event without reopening a transaction, reconstructing payment or reserving ledger funds. Partial/conflicting rows remain fail-closed. Concurrent first submissions and exactly-once event delivery still require a durable buyer-bound request key and transactional outbox.
+
+Recovery identity preflight also rejects missing, non-string, empty or whitespace-padded buyer, vendor, offer, coin and purchase-type values before querying committed purchases. A shipping ID may be `null` for digital purchases; if present it must be a canonical non-empty string. PHPUnit coverage verifies rejection before recovery lookup, ledger reservation, transaction or event dispatch. The following authenticated-buyer guard now supplies the account binding; neither guard replaces the pending durable request key.
+
+Checkout preflight now also binds that validated buyer ID to the authenticated profile identity before recovery lookup or any ledger/transaction work. Runtime regressions cover a missing identity and an account-mismatched cart, preserve the cart, and prove that recovery, reservation, transaction and purchase-event dispatch are not reached. This is still not a durable request key or transactional outbox.
+
+Committed rows found during sequential, duplicate-key or ambiguous-commit recovery are now validated just as strictly before identity comparison. Required strings, nullable shipping and canonical positive quantities are checked without permissive casts; PHPUnit covers corrupt persisted values and the canonical database string quantity form. A mismatch preserves the cart and reaches no ledger, transaction or purchase event. This remains defensive recovery validation rather than a durable request key or transactional outbox.
+
+Checkout identity preflight also rejects canonical-looking but unsupported coin names and purchase types before recovery lookup, ledger resolution or transaction work. The regression extends the existing invalid-identity provider with values absent from `coins.coin_list` and `Purchase::$types`, preserves the cart and dispatches no purchase event. No wallet or RPC service is contacted.
