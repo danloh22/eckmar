@@ -645,6 +645,102 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    /**
+     * @dataProvider invalidCommittedRecoveryIdentityValues
+     */
+    public function testSequentialRecoveryRejectsNonCanonicalCommittedIdentity(
+        $attribute,
+        $requestedValue,
+        $committedValue
+    ) {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout status is inconsistent. Please contact support.'
+        );
+
+        $purchase = new Purchase();
+        $purchase->id = 'noncanonical-committed-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        $purchase->setAttribute($attribute, $requestedValue);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->setAttribute($attribute, $committedValue);
+        $committed->exists = true;
+
+        $request = new CheckoutRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Non-canonical committed recovery identity must fail closed.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout status is inconsistent. Please contact support.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function invalidCommittedRecoveryIdentityValues()
+    {
+        return [
+            'missing persisted buyer' => ['buyer_id', 'buyer-id', null],
+            'empty persisted shipping aliases null under string cast' => ['shipping_id', null, ''],
+            'numeric persisted coin aliases string under cast' => ['coin_name', '42', 42],
+            'quantity suffix aliases integer under cast' => ['quantity', 2, '2oops'],
+            'zero-padded quantity is non-canonical' => ['quantity', 2, '02'],
+        ];
+    }
+
+    public function testSequentialRecoveryAcceptsCanonicalDatabaseQuantityString()
+    {
+        Event::fake([NewPurchase::class]);
+
+        $purchase = new Purchase();
+        $purchase->id = 'canonical-quantity-recovery-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->quantity = '2';
+        $committed->exists = true;
+        $committed->setRelation('buyer', (object) ['id' => 'buyer-id']);
+        $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
+        $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
+
+        $request = new CheckoutRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        $request->persist($ledger);
+
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertDispatched(NewPurchase::class, 1);
+    }
+
     public function testPostCommitSessionClearFailureRecoversWithoutRepeatingReservation()
     {
         Event::fake([NewPurchase::class]);

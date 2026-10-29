@@ -315,12 +315,39 @@ class MakePurchasesRequest extends FormRequest
 
     protected function sameCheckoutIdentity(Purchase $requested, Purchase $committed)
     {
-        foreach (['buyer_id', 'vendor_id', 'offer_id', 'shipping_id', 'coin_name', 'type'] as $attribute) {
-            if ((string) $requested->getAttribute($attribute) !== (string) $committed->getAttribute($attribute)) {
+        foreach (['buyer_id', 'vendor_id', 'offer_id', 'coin_name', 'type'] as $attribute) {
+            $value = $committed->getAttribute($attribute);
+            if (!is_string($value) || $value === '' || trim($value) !== $value
+                || $requested->getAttribute($attribute) !== $value
+            ) {
                 return false;
             }
         }
 
-        return (int) $requested->getAttribute('quantity') === (int) $committed->getAttribute('quantity');
+        $shippingId = $committed->getAttribute('shipping_id');
+        if ($shippingId !== null
+            && (!is_string($shippingId) || $shippingId === '' || trim($shippingId) !== $shippingId)
+        ) {
+            return false;
+        }
+        if ($requested->getAttribute('shipping_id') !== $shippingId) {
+            return false;
+        }
+
+        $quantity = $committed->getAttribute('quantity');
+        if (is_string($quantity)) {
+            if (!preg_match('/^[1-9][0-9]*$/D', $quantity)) {
+                return false;
+            }
+            $integerQuantity = (int) $quantity;
+            if ((string) $integerQuantity !== $quantity) {
+                return false;
+            }
+            $quantity = $integerQuantity;
+        }
+
+        return is_int($quantity)
+            && $quantity > 0
+            && $requested->getAttribute('quantity') === $quantity;
     }
 }

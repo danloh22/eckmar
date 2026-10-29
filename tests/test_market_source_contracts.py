@@ -469,6 +469,33 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("'mysql deadlock' => ['40001', 1213, false]", checkout_tests)
         self.assertIn("'mysql lock timeout' => ['HY000', 1205, false]", checkout_tests)
 
+    def test_checkout_recovery_requires_canonical_committed_identity(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("protected function sameCheckoutIdentity(")
+        identity = source[start:]
+
+        self.assertIn("!is_string($value)", identity)
+        self.assertIn("trim($value) !== $value", identity)
+        self.assertIn("$shippingId !== null", identity)
+        self.assertIn("preg_match('/^[1-9][0-9]*$/D', $quantity)", identity)
+        self.assertIn("(string) $integerQuantity !== $quantity", identity)
+        self.assertNotIn("(string) $requested->getAttribute", identity)
+        self.assertNotIn("(int) $requested->getAttribute", identity)
+
+        checkout_tests = (
+            self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "testSequentialRecoveryRejectsNonCanonicalCommittedIdentity",
+            checkout_tests,
+        )
+        self.assertIn(
+            "testSequentialRecoveryAcceptsCanonicalDatabaseQuantityString",
+            checkout_tests,
+        )
+
     def test_wallet_race_recovery_rejects_unrelated_database_errors(self):
         source = (
             self.root / "app/Services/WalletLedgerService.php"
