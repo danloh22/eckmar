@@ -56,23 +56,32 @@ class MakePurchasesRequest extends FormRequest
                 return $purchase;
             }, $items);
             $this->assertStableCheckoutIdentities($items);
-            // Resolve the ledger only after the cart and its recovery identities
-            // have passed the side-effect-free preflight.
-            $ledger = $ledger ?: app(WalletLedgerService::class);
-            // Do not automatically retry this closure: rollback does not reset the
-            // captured Eloquent models' exists/attributes or the purchases list.
-            // Reusing them after a deadlock could update an insert that rolled back.
-            DB::transaction(function () use ($items, $ledger, &$purchases) {
-                foreach ($items as $item) {
-                    $item->purchased();
-                    $item->save();
-                    $ledger->reservePurchase($item);
-                    $purchases[] = $item;
-                }
-            });
-            $transactionCompleted = true;
-            // Clear cart after commiting
-            $this->clearCheckoutCart();
+            // A sequential retry may arrive after the first request committed but
+            // before its session cart was cleared. Recover that complete result
+            // before payment, inventory or ledger work can be repeated.
+            $recovered = $this->recoverCommittedCheckout($items);
+            if ($recovered !== null) {
+                $purchases = $recovered;
+                $this->clearCheckoutCart();
+            } else {
+                // Resolve the ledger only after the cart and its recovery identities
+                // have passed the side-effect-free preflight.
+                $ledger = $ledger ?: app(WalletLedgerService::class);
+                // Do not automatically retry this closure: rollback does not reset the
+                // captured Eloquent models' exists/attributes or the purchases list.
+                // Reusing them after a deadlock could update an insert that rolled back.
+                DB::transaction(function () use ($items, $ledger, &$purchases) {
+                    foreach ($items as $item) {
+                        $item->purchased();
+                        $item->save();
+                        $ledger->reservePurchase($item);
+                        $purchases[] = $item;
+                    }
+                });
+                $transactionCompleted = true;
+                // Clear cart after committing.
+                $this->clearCheckoutCart();
+            }
         }
         catch(RequestException $requestException){
             Log::error($requestException -> getMessage());

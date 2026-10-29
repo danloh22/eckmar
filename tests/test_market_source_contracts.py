@@ -202,11 +202,15 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         start = source.index("public function persist(")
         persist_source = source[start:]
         guard_call = "$this->assertStableCheckoutIdentities($items);"
+        preflight_recovery = "$recovered = $this->recoverCommittedCheckout($items);"
         ledger_resolution = "$ledger = $ledger ?: app(WalletLedgerService::class);"
         transaction = "DB::transaction("
 
         self.assertIn(guard_call, persist_source)
+        self.assertIn(preflight_recovery, persist_source)
         self.assertIn(ledger_resolution, persist_source)
+        self.assertLess(persist_source.index(guard_call), persist_source.index(preflight_recovery))
+        self.assertLess(persist_source.index(preflight_recovery), persist_source.index(ledger_resolution))
         self.assertLess(persist_source.index(guard_call), persist_source.index(ledger_resolution))
         self.assertLess(persist_source.index(ledger_resolution), persist_source.index(transaction))
         self.assertLess(persist_source.index(guard_call), persist_source.index(transaction))
@@ -232,6 +236,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("testMissingOrNonStringPurchaseIdIsRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("testInvalidPurchaseQuantityIsRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("invalidCheckoutQuantityValues", checkout_tests)
+        self.assertIn("testSequentialRetryRecoversBeforeTransactionOrLedgerReservation", checkout_tests)
         self.assertIn("testInvalidCartDoesNotResolveLedgerService", checkout_tests)
         self.assertIn("testEmptyCartDoesNotResolveLedgerService", checkout_tests)
         self.assertIn("testLedgerResolutionFailureIsNormalizedBeforeTransaction", checkout_tests)
@@ -239,7 +244,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("Ledger service must not be resolved for an empty cart.", checkout_tests)
         self.assertIn("testCheckoutRequestExceptionPreservesOriginalContext", checkout_tests)
         self.assertIn("$this->assertSame($expected, $exception);", checkout_tests)
-        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 7)
+        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 8)
 
         self.assertIn("throw $requestException;", persist_source)
         self.assertNotIn(

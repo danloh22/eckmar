@@ -38,7 +38,7 @@ class CheckoutTransactionRetryTest extends TestCase
             return $callback();
         });
 
-        (new MakePurchasesRequest())->persist($ledger);
+        (new CheckoutNoRecoveryRequestDouble())->persist($ledger);
 
         $this->assertCount(1, $reserved);
         $this->assertNotSame($purchase, $reserved[0]);
@@ -73,7 +73,7 @@ class CheckoutTransactionRetryTest extends TestCase
         });
 
         // No exception is expected on the successful checkout path.
-        (new MakePurchasesRequest())->persist($ledger);
+        (new CheckoutNoRecoveryRequestDouble())->persist($ledger);
         $this->assertSame(1, $transactionCount);
         $this->assertSame(1, $reservationCount);
         $this->assertEmpty(Cart::getCart()->items());
@@ -109,7 +109,7 @@ class CheckoutTransactionRetryTest extends TestCase
         DB::shouldReceive('transaction')->never();
 
         try {
-            (new MakePurchasesRequest())->persist();
+            (new CheckoutNoRecoveryRequestDouble())->persist();
             $this->fail('Empty cart must fail before resolving the ledger service.');
         } catch (RequestException $exception) {
             $this->assertSame('Add at least one product before opening checkout.', $exception->getMessage());
@@ -262,7 +262,7 @@ class CheckoutTransactionRetryTest extends TestCase
         DB::shouldReceive('transaction')->never();
 
         try {
-            (new MakePurchasesRequest())->persist();
+            (new CheckoutNoRecoveryRequestDouble())->persist();
             $this->fail('Ledger resolution failure must stop checkout.');
         } catch (RequestException $exception) {
             $this->assertSame('Error happened! Try again later!', $exception->getMessage());
@@ -325,6 +325,40 @@ class CheckoutTransactionRetryTest extends TestCase
         ];
     }
 
+    public function testSequentialRetryRecoversBeforeTransactionOrLedgerReservation()
+    {
+        Event::fake([NewPurchase::class]);
+
+        $purchase = new Purchase();
+        $purchase->id = 'sequential-retry-purchase-id';
+        $purchase->buyer_id = 'buyer-id';
+        $purchase->vendor_id = 'vendor-id';
+        $purchase->offer_id = 'offer-id';
+        $purchase->shipping_id = null;
+        $purchase->quantity = 2;
+        $purchase->coin_name = 'btc';
+        $purchase->type = 'normal';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $committed = new Purchase();
+        $committed->forceFill($purchase->getAttributes());
+        $committed->exists = true;
+
+        $request = new CheckoutRecoveryRequestDouble();
+        $request->committedPurchases[$purchase->id] = $committed;
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        $request->persist($ledger);
+
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertDispatched(NewPurchase::class, function (NewPurchase $event) use ($committed) {
+            return $event->purchase === $committed;
+        });
+    }
+
     public function testAmbiguousCommitRecoversMatchingPersistedPurchases()
     {
         Event::fake([NewPurchase::class]);
@@ -348,7 +382,7 @@ class CheckoutTransactionRetryTest extends TestCase
         $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
         $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
 
-        $request = new CheckoutRecoveryRequestDouble();
+        $request = new CheckoutPostFailureRecoveryRequestDouble();
         $request->committedPurchases[$purchase->id] = $committed;
 
         $ledger = Mockery::mock(WalletLedgerService::class);
@@ -420,7 +454,7 @@ class CheckoutTransactionRetryTest extends TestCase
         $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
         $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
 
-        $request = new CheckoutRecoveryRequestDouble();
+        $request = new CheckoutPostFailureRecoveryRequestDouble();
         $request->committedPurchases[$purchase->id] = $committed;
 
         $ledger = Mockery::mock(WalletLedgerService::class);
@@ -493,7 +527,7 @@ class CheckoutTransactionRetryTest extends TestCase
         $committed->buyer_id = 'different-buyer-id';
         $committed->exists = true;
 
-        $request = new CheckoutRecoveryRequestDouble();
+        $request = new CheckoutPostFailureRecoveryRequestDouble();
         $request->committedPurchases[$purchase->id] = $committed;
 
         $ledger = Mockery::mock(WalletLedgerService::class);
@@ -635,7 +669,7 @@ class CheckoutTransactionRetryTest extends TestCase
         for ($request = 0; $request < 2; $request++) {
             $failure = null;
             try {
-                (new MakePurchasesRequest())->persist($ledger);
+                (new CheckoutNoRecoveryRequestDouble())->persist($ledger);
             } catch (RequestException $exception) {
                 $failure = $exception;
             }
@@ -704,7 +738,30 @@ class CheckoutRecoveryRequestDouble extends MakePurchasesRequest
     }
 }
 
-class SessionClearFailureRequestDouble extends CheckoutRecoveryRequestDouble
+class CheckoutNoRecoveryRequestDouble extends MakePurchasesRequest
+{
+    protected function recoverCommittedCheckout(array $items)
+    {
+        return null;
+    }
+}
+
+class CheckoutPostFailureRecoveryRequestDouble extends CheckoutRecoveryRequestDouble
+{
+    private $recoveryCalls = 0;
+
+    protected function recoverCommittedCheckout(array $items)
+    {
+        $this->recoveryCalls++;
+        if ($this->recoveryCalls === 1) {
+            return null;
+        }
+
+        return parent::recoverCommittedCheckout($items);
+    }
+}
+
+class SessionClearFailureRequestDouble extends CheckoutPostFailureRecoveryRequestDouble
 {
     public $clearAttempts = 0;
 
