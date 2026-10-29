@@ -220,12 +220,18 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("isset($seen[$id])", guard)
         self.assertIn("$seen[$id] = true;", guard)
         self.assertIn("Checkout identity is missing or duplicated", guard)
+        self.assertIn("$item->getAttribute('quantity')", guard)
+        self.assertIn("!is_int($quantity)", guard)
+        self.assertIn("$quantity < 1", guard)
+        self.assertIn("Checkout quantity is invalid", guard)
 
         checkout_tests = (
             self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
         ).read_text(encoding="utf-8")
         self.assertIn("testDuplicatePurchaseIdsAreRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("testMissingOrNonStringPurchaseIdIsRejectedBeforeOpeningTransaction", checkout_tests)
+        self.assertIn("testInvalidPurchaseQuantityIsRejectedBeforeOpeningTransaction", checkout_tests)
+        self.assertIn("invalidCheckoutQuantityValues", checkout_tests)
         self.assertIn("testInvalidCartDoesNotResolveLedgerService", checkout_tests)
         self.assertIn("testEmptyCartDoesNotResolveLedgerService", checkout_tests)
         self.assertIn("testLedgerResolutionFailureIsNormalizedBeforeTransaction", checkout_tests)
@@ -233,7 +239,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("Ledger service must not be resolved for an empty cart.", checkout_tests)
         self.assertIn("testCheckoutRequestExceptionPreservesOriginalContext", checkout_tests)
         self.assertIn("$this->assertSame($expected, $exception);", checkout_tests)
-        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 6)
+        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 7)
 
         self.assertIn("throw $requestException;", persist_source)
         self.assertNotIn(

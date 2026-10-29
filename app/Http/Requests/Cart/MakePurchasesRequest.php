@@ -149,6 +149,12 @@ class MakePurchasesRequest extends FormRequest
                     'Checkout identity is missing or duplicated. Please rebuild your cart.'
                 );
             }
+            $quantity = $item->getAttribute('quantity');
+            if (!is_int($quantity) || $quantity < 1) {
+                throw new RequestException(
+                    'Checkout quantity is invalid. Please rebuild your cart.'
+                );
+            }
             $seen[$id] = true;
         }
     }

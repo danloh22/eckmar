@@ -186,6 +186,39 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    /**
+     * @dataProvider invalidCheckoutQuantityValues
+     */
+    public function testInvalidPurchaseQuantityIsRejectedBeforeOpeningTransaction($invalidQuantity)
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout quantity is invalid. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'invalid-quantity-purchase-id';
+        $purchase->setAttribute('quantity', $invalidQuantity);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist($ledger);
+            $this->fail('Invalid checkout quantity must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout quantity is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     public function testInvalidCartDoesNotResolveLedgerService()
     {
         Event::fake([NewPurchase::class]);
@@ -277,6 +310,18 @@ class CheckoutTransactionRetryTest extends TestCase
             'whitespace' => [' purchase-id '],
             'integer' => [42],
             'array' => [['purchase-id']],
+        ];
+    }
+
+    public function invalidCheckoutQuantityValues()
+    {
+        return [
+            'missing' => [null],
+            'zero' => [0],
+            'negative' => [-1],
+            'numeric string' => ['1'],
+            'numeric suffix' => ['1oops'],
+            'fractional' => [1.5],
         ];
     }
 
@@ -623,6 +668,12 @@ class CheckoutTransactionRetryTest extends TestCase
 class CheckoutPurchaseDouble extends Purchase
 {
     public static $startingStates = [];
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->quantity = 1;
+    }
 
     public function purchased()
     {

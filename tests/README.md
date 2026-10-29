@@ -111,3 +111,5 @@ The production resolver also rejects calls made outside an active database trans
 The same suite now proves that an empty cart also fails before resolving `WalletLedgerService` from the application container. The regression opens no transaction and dispatches no purchase event; it does not construct a wallet service or perform any wallet/RPC operation.
 
 Known checkout `RequestException` instances are also rethrown unchanged after logging. The regression preserves the exact exception object, status code and previous cause while proving no transaction, reservation or purchase event occurs and the session cart remains intact.
+
+Checkout preflight also requires a positive native-integer quantity. Missing, zero, negative, fractional and numeric-string quantities fail before ledger resolution, transaction, reservation or event dispatch, and the corrupt session cart remains available for explicit recovery. This avoids permissive integer casts aliasing distinct corrupt inputs during ambiguous-commit comparison; it does not replace the pending durable buyer-bound request key.
