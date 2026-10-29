@@ -76,7 +76,7 @@ class MakePurchasesRequest extends FormRequest
         }
         catch(RequestException $requestException){
             Log::error($requestException -> getMessage());
-            throw new RequestException($requestException -> getMessage());
+            throw $requestException;
         }
         catch (\Exception $e){
             Log::error($e -> getMessage());

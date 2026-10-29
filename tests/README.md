@@ -109,3 +109,5 @@ The production resolver also rejects calls made outside an active database trans
 `CheckoutTransactionRetryTest` also rejects a corrupt session cart before ledger service resolution, any transaction, reservation or `NewPurchase` event when a purchase ID is missing, non-string, blank, whitespace-padded or duplicated under different cart keys. This protects read-only ambiguous-commit recovery from counting the same committed purchase twice and keeps invalid-cart rejection independent of wallet/ledger initialization. It does not replace the pending durable, buyer-bound checkout request key.
 
 The same suite now proves that an empty cart also fails before resolving `WalletLedgerService` from the application container. The regression opens no transaction and dispatches no purchase event; it does not construct a wallet service or perform any wallet/RPC operation.
+
+Known checkout `RequestException` instances are also rethrown unchanged after logging. The regression preserves the exact exception object, status code and previous cause while proving no transaction, reservation or purchase event occurs and the session cart remains intact.

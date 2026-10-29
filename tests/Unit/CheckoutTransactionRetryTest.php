@@ -239,6 +239,36 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    public function testCheckoutRequestExceptionPreservesOriginalContext()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Known checkout failure.');
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'context-purchase-id';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $previous = new \RuntimeException('Original cause');
+        $expected = new RequestException('Known checkout failure.', 409, $previous);
+        $request = new CheckoutPreflightFailureRequestDouble($expected);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Known checkout failure must be rethrown.');
+        } catch (RequestException $exception) {
+            $this->assertSame($expected, $exception);
+            $this->assertSame(409, $exception->getCode());
+            $this->assertSame($previous, $exception->getPrevious());
+        }
+
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     public function invalidCheckoutIdentityValues()
     {
         return [
@@ -635,5 +665,20 @@ class SessionClearFailureRequestDouble extends CheckoutRecoveryRequestDouble
         }
 
         parent::clearCheckoutCart();
+    }
+}
+
+class CheckoutPreflightFailureRequestDouble extends MakePurchasesRequest
+{
+    private $failure;
+
+    public function __construct(RequestException $failure)
+    {
+        $this->failure = $failure;
+    }
+
+    protected function assertStableCheckoutIdentities(array $items)
+    {
+        throw $this->failure;
     }
 }

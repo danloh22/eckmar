@@ -231,7 +231,15 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("testLedgerResolutionFailureIsNormalizedBeforeTransaction", checkout_tests)
         self.assertIn("Ledger service must not be resolved for an invalid cart.", checkout_tests)
         self.assertIn("Ledger service must not be resolved for an empty cart.", checkout_tests)
-        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 5)
+        self.assertIn("testCheckoutRequestExceptionPreservesOriginalContext", checkout_tests)
+        self.assertIn("$this->assertSame($expected, $exception);", checkout_tests)
+        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 6)
+
+        self.assertIn("throw $requestException;", persist_source)
+        self.assertNotIn(
+            "throw new RequestException($requestException -> getMessage());",
+            persist_source,
+        )
 
     def test_profile_purchase_views_authorize_before_rendering(self):
         source = (
