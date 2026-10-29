@@ -172,6 +172,13 @@ class MakePurchasesRequest extends FormRequest
                     );
                 }
             }
+            if (!array_key_exists($item->getAttribute('coin_name'), config('coins.coin_list', []))
+                || !array_key_exists($item->getAttribute('type'), Purchase::$types)
+            ) {
+                throw new RequestException(
+                    'Checkout recovery identity is invalid. Please rebuild your cart.'
+                );
+            }
             $shippingId = $item->getAttribute('shipping_id');
             if ($shippingId !== null
                 && (!is_string($shippingId) || $shippingId === '' || trim($shippingId) !== $shippingId)

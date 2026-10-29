@@ -790,6 +790,27 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertIn("$this->assertSame('rejected', $checkout['status']);", mysql_test)
         self.assertIn("$this->assertSame('removed', $removal['status']);", mysql_test)
 
+    def test_checkout_preflight_rejects_unsupported_coin_and_purchase_type(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("protected function assertStableCheckoutIdentities")
+        end = source.index("protected function currentCheckoutBuyerId", start)
+        preflight = source[start:end]
+
+        coin_guard = (
+            "array_key_exists($item->getAttribute('coin_name'), "
+            "config('coins.coin_list', []))"
+        )
+        type_guard = "array_key_exists($item->getAttribute('type'), Purchase::$types)"
+        buyer_lookup = "$buyerId = $this->currentCheckoutBuyerId();"
+
+        self.assertIn(coin_guard, preflight)
+        self.assertIn(type_guard, preflight)
+        self.assertIn(buyer_lookup, preflight)
+        self.assertLess(preflight.index(coin_guard), preflight.index(buyer_lookup))
+        self.assertLess(preflight.index(type_guard), preflight.index(buyer_lookup))
+
 if __name__ == "__main__":
     unittest.main()
 
