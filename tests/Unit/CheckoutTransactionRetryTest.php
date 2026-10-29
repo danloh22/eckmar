@@ -355,7 +355,7 @@ class CheckoutTransactionRetryTest extends TestCase
 
         $this->assertEmpty(Cart::getCart()->items());
         Event::assertDispatched(NewPurchase::class, function (NewPurchase $event) use ($committed) {
-            return $event->purchase === $committed;
+            return $event->purchase->id === $committed->id;
         });
     }
 
