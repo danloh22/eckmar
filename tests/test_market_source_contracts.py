@@ -227,9 +227,11 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("testDuplicatePurchaseIdsAreRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("testMissingOrNonStringPurchaseIdIsRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("testInvalidCartDoesNotResolveLedgerService", checkout_tests)
+        self.assertIn("testEmptyCartDoesNotResolveLedgerService", checkout_tests)
         self.assertIn("testLedgerResolutionFailureIsNormalizedBeforeTransaction", checkout_tests)
         self.assertIn("Ledger service must not be resolved for an invalid cart.", checkout_tests)
-        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 4)
+        self.assertIn("Ledger service must not be resolved for an empty cart.", checkout_tests)
+        self.assertGreaterEqual(checkout_tests.count("DB::shouldReceive('transaction')->never()"), 5)
 
     def test_profile_purchase_views_authorize_before_rendering(self):
         source = (

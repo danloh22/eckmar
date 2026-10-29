@@ -98,6 +98,27 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    public function testEmptyCartDoesNotResolveLedgerService()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with('Add at least one product before opening checkout.');
+        session()->forget(Cart::SESSION_NAME);
+        app()->bind(WalletLedgerService::class, function () {
+            throw new \RuntimeException('Ledger service must not be resolved for an empty cart.');
+        });
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            (new MakePurchasesRequest())->persist();
+            $this->fail('Empty cart must fail before resolving the ledger service.');
+        } catch (RequestException $exception) {
+            $this->assertSame('Add at least one product before opening checkout.', $exception->getMessage());
+        }
+
+        $this->assertEmpty(Cart::getCart()->items());
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     public function testDuplicatePurchaseIdsAreRejectedBeforeOpeningTransaction()
     {
         Event::fake([NewPurchase::class]);
