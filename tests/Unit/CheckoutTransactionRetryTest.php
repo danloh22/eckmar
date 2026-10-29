@@ -325,6 +325,57 @@ class CheckoutTransactionRetryTest extends TestCase
         ];
     }
 
+    /**
+     * @dataProvider invalidCheckoutRecoveryIdentityValues
+     */
+    public function testInvalidRecoveryIdentityIsRejectedBeforeLookupOrLedgerResolution(
+        $attribute,
+        $invalidValue
+    ) {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout recovery identity is invalid. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'invalid-recovery-identity-id';
+        $purchase->setAttribute($attribute, $invalidValue);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $request = new CheckoutRecoveryProbeRequestDouble();
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Invalid recovery identity must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout recovery identity is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function invalidCheckoutRecoveryIdentityValues()
+    {
+        return [
+            'missing buyer' => ['buyer_id', null],
+            'non-string vendor' => ['vendor_id', 42],
+            'empty offer' => ['offer_id', ''],
+            'whitespace coin' => ['coin_name', ' btc '],
+            'non-string purchase type' => ['type', ['normal']],
+            'empty shipping' => ['shipping_id', ''],
+            'whitespace shipping' => ['shipping_id', ' shipping-id '],
+            'non-string shipping' => ['shipping_id', 42],
+        ];
+    }
+
     public function testSequentialRetryRecoversBeforeTransactionOrLedgerReservation()
     {
         Event::fake([NewPurchase::class]);
@@ -709,7 +760,13 @@ class CheckoutPurchaseDouble extends Purchase
     public function __construct()
     {
         parent::__construct();
+        $this->buyer_id = 'buyer-id';
+        $this->vendor_id = 'vendor-id';
+        $this->offer_id = 'offer-id';
+        $this->shipping_id = null;
         $this->quantity = 1;
+        $this->coin_name = 'btc';
+        $this->type = 'normal';
     }
 
     public function purchased()
@@ -738,6 +795,17 @@ class CheckoutRecoveryRequestDouble extends MakePurchasesRequest
     protected function findCommittedPurchase($id)
     {
         return $this->committedPurchases[$id] ?? null;
+    }
+}
+
+class CheckoutRecoveryProbeRequestDouble extends MakePurchasesRequest
+{
+    public $recoveryCalls = 0;
+
+    protected function recoverCommittedCheckout(array $items)
+    {
+        $this->recoveryCalls++;
+        return null;
     }
 }
 

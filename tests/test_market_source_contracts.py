@@ -228,6 +228,14 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("!is_int($quantity)", guard)
         self.assertIn("$quantity < 1", guard)
         self.assertIn("Checkout quantity is invalid", guard)
+        self.assertIn(
+            "['buyer_id', 'vendor_id', 'offer_id', 'coin_name', 'type']",
+            guard,
+        )
+        self.assertIn("$item->getAttribute($attribute)", guard)
+        self.assertIn("$item->getAttribute('shipping_id')", guard)
+        self.assertIn("$shippingId !== null", guard)
+        self.assertIn("Checkout recovery identity is invalid", guard)
 
         checkout_tests = (
             self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
@@ -235,6 +243,11 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("testDuplicatePurchaseIdsAreRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("testMissingOrNonStringPurchaseIdIsRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("testInvalidPurchaseQuantityIsRejectedBeforeOpeningTransaction", checkout_tests)
+        self.assertIn(
+            "testInvalidRecoveryIdentityIsRejectedBeforeLookupOrLedgerResolution",
+            checkout_tests,
+        )
+        self.assertIn("$this->assertSame(0, $request->recoveryCalls);", checkout_tests)
         self.assertIn("invalidCheckoutQuantityValues", checkout_tests)
         self.assertIn("testSequentialRetryRecoversBeforeTransactionOrLedgerReservation", checkout_tests)
         self.assertIn("testInvalidCartDoesNotResolveLedgerService", checkout_tests)

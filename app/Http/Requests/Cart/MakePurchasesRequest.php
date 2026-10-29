@@ -164,6 +164,22 @@ class MakePurchasesRequest extends FormRequest
                     'Checkout quantity is invalid. Please rebuild your cart.'
                 );
             }
+            foreach (['buyer_id', 'vendor_id', 'offer_id', 'coin_name', 'type'] as $attribute) {
+                $value = $item->getAttribute($attribute);
+                if (!is_string($value) || $value === '' || trim($value) !== $value) {
+                    throw new RequestException(
+                        'Checkout recovery identity is invalid. Please rebuild your cart.'
+                    );
+                }
+            }
+            $shippingId = $item->getAttribute('shipping_id');
+            if ($shippingId !== null
+                && (!is_string($shippingId) || $shippingId === '' || trim($shippingId) !== $shippingId)
+            ) {
+                throw new RequestException(
+                    'Checkout recovery identity is invalid. Please rebuild your cart.'
+                );
+            }
             $seen[$id] = true;
         }
     }
