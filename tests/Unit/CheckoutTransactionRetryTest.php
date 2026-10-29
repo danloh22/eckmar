@@ -376,6 +376,50 @@ class CheckoutTransactionRetryTest extends TestCase
         ];
     }
 
+    /**
+     * @dataProvider invalidAuthenticatedBuyerValues
+     */
+    public function testCheckoutRejectsMissingOrMismatchedAuthenticatedBuyerBeforeRecovery(
+        $authenticatedBuyerId
+    ) {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout recovery identity is invalid. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'authenticated-buyer-preflight-id';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $request = new CheckoutRecoveryProbeRequestDouble();
+        $request->checkoutBuyerId = $authenticatedBuyerId;
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('Checkout must be bound to the authenticated buyer.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout recovery identity is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function invalidAuthenticatedBuyerValues()
+    {
+        return [
+            'missing authenticated buyer' => [null],
+            'different authenticated buyer' => ['other-buyer-id'],
+        ];
+    }
+
     public function testSequentialRetryRecoversBeforeTransactionOrLedgerReservation()
     {
         Event::fake([NewPurchase::class]);
@@ -790,7 +834,17 @@ class CheckoutPurchaseDouble extends Purchase
 }
 
 
-class CheckoutRecoveryRequestDouble extends MakePurchasesRequest
+class CheckoutAuthenticatedRequestDouble extends MakePurchasesRequest
+{
+    public $checkoutBuyerId = 'buyer-id';
+
+    protected function currentCheckoutBuyerId()
+    {
+        return $this->checkoutBuyerId;
+    }
+}
+
+class CheckoutRecoveryRequestDouble extends CheckoutAuthenticatedRequestDouble
 {
     public $committedPurchases = [];
 
@@ -800,7 +854,7 @@ class CheckoutRecoveryRequestDouble extends MakePurchasesRequest
     }
 }
 
-class CheckoutRecoveryProbeRequestDouble extends MakePurchasesRequest
+class CheckoutRecoveryProbeRequestDouble extends CheckoutAuthenticatedRequestDouble
 {
     public $recoveryCalls = 0;
 
@@ -811,7 +865,7 @@ class CheckoutRecoveryProbeRequestDouble extends MakePurchasesRequest
     }
 }
 
-class CheckoutNoRecoveryRequestDouble extends MakePurchasesRequest
+class CheckoutNoRecoveryRequestDouble extends CheckoutAuthenticatedRequestDouble
 {
     protected function recoverCommittedCheckout(array $items)
     {
@@ -849,7 +903,7 @@ class SessionClearFailureRequestDouble extends CheckoutPostFailureRecoveryReques
     }
 }
 
-class CheckoutPreflightFailureRequestDouble extends MakePurchasesRequest
+class CheckoutPreflightFailureRequestDouble extends CheckoutAuthenticatedRequestDouble
 {
     private $failure;
 

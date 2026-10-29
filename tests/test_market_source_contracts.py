@@ -235,6 +235,12 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("$item->getAttribute($attribute)", guard)
         self.assertIn("$item->getAttribute('shipping_id')", guard)
         self.assertIn("$shippingId !== null", guard)
+        self.assertIn("$buyerId = $this->currentCheckoutBuyerId();", guard)
+        self.assertIn("$item->getAttribute('buyer_id') !== $buyerId", guard)
+        self.assertLess(
+            guard.index("$buyerId = $this->currentCheckoutBuyerId();"),
+            guard.index("foreach ($items as $item)"),
+        )
         self.assertIn("Checkout recovery identity is invalid", guard)
 
         checkout_tests = (
@@ -245,6 +251,10 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("testInvalidPurchaseQuantityIsRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn(
             "testInvalidRecoveryIdentityIsRejectedBeforeLookupOrLedgerResolution",
+            checkout_tests,
+        )
+        self.assertIn(
+            "testCheckoutRejectsMissingOrMismatchedAuthenticatedBuyerBeforeRecovery",
             checkout_tests,
         )
         self.assertIn("$this->assertSame(0, $request->recoveryCalls);", checkout_tests)
