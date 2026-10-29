@@ -150,13 +150,6 @@ class MakePurchasesRequest extends FormRequest
      */
     protected function assertStableCheckoutIdentities(array $items)
     {
-        $buyerId = $this->currentCheckoutBuyerId();
-        if (!is_string($buyerId) || $buyerId === '' || trim($buyerId) !== $buyerId) {
-            throw new RequestException(
-                'Checkout recovery identity is invalid. Please rebuild your cart.'
-            );
-        }
-
         $seen = [];
         foreach ($items as $item) {
             $id = $item->getAttribute('id');
@@ -179,11 +172,6 @@ class MakePurchasesRequest extends FormRequest
                     );
                 }
             }
-            if ($item->getAttribute('buyer_id') !== $buyerId) {
-                throw new RequestException(
-                    'Checkout recovery identity is invalid. Please rebuild your cart.'
-                );
-            }
             $shippingId = $item->getAttribute('shipping_id');
             if ($shippingId !== null
                 && (!is_string($shippingId) || $shippingId === '' || trim($shippingId) !== $shippingId)
@@ -193,6 +181,20 @@ class MakePurchasesRequest extends FormRequest
                 );
             }
             $seen[$id] = true;
+        }
+
+        $buyerId = $this->currentCheckoutBuyerId();
+        if (!is_string($buyerId) || $buyerId === '' || trim($buyerId) !== $buyerId) {
+            throw new RequestException(
+                'Checkout recovery identity is invalid. Please rebuild your cart.'
+            );
+        }
+        foreach ($items as $item) {
+            if ($item->getAttribute('buyer_id') !== $buyerId) {
+                throw new RequestException(
+                    'Checkout recovery identity is invalid. Please rebuild your cart.'
+                );
+            }
         }
     }
 

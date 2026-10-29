@@ -237,9 +237,9 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("$shippingId !== null", guard)
         self.assertIn("$buyerId = $this->currentCheckoutBuyerId();", guard)
         self.assertIn("$item->getAttribute('buyer_id') !== $buyerId", guard)
-        self.assertLess(
+        self.assertGreater(
             guard.index("$buyerId = $this->currentCheckoutBuyerId();"),
-            guard.index("foreach ($items as $item)"),
+            guard.index("$seen[$id] = true;"),
         )
         self.assertIn("Checkout recovery identity is invalid", guard)
 
