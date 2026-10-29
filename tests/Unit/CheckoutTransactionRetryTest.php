@@ -343,6 +343,9 @@ class CheckoutTransactionRetryTest extends TestCase
         $committed = new Purchase();
         $committed->forceFill($purchase->getAttributes());
         $committed->exists = true;
+        $committed->setRelation('buyer', (object) ['id' => 'buyer-id']);
+        $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
+        $committed->setRelation('offer', (object) ['product' => (object) ['id' => 'product-id']]);
 
         $request = new CheckoutRecoveryRequestDouble();
         $request->committedPurchases[$purchase->id] = $committed;
