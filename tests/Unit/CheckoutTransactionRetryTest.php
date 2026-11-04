@@ -11,6 +11,7 @@ use App\Services\WalletLedgerService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Mockery;
 use Tests\TestCase;
 
@@ -77,6 +78,108 @@ class CheckoutTransactionRetryTest extends TestCase
         $this->assertSame(1, $transactionCount);
         $this->assertSame(1, $reservationCount);
         $this->assertEmpty(Cart::getCart()->items());
+    }
+
+    public function testPostCommitEventFailureIsReportedAndDoesNotBlockLaterPurchases()
+    {
+        CheckoutPurchaseDouble::$startingStates = [];
+        $first = new CheckoutPurchaseDouble();
+        $first->id = 'event-first-purchase-id';
+        $first->message = 'first message';
+        $second = new CheckoutPurchaseDouble();
+        $second->id = 'event-second-purchase-id';
+        $second->message = 'second message';
+        session()->put(Cart::SESSION_NAME, [
+            'z-product' => $second,
+            'a-product' => $first,
+        ]);
+
+        $dispatchFailure = new \RuntimeException('first purchase event failed');
+        $reporter = Mockery::mock(ExceptionHandler::class);
+        $reporter->shouldReceive('report')->once()->with($dispatchFailure);
+        app()->instance(ExceptionHandler::class, $reporter);
+
+        $attempted = [];
+        Event::shouldReceive('dispatch')->twice()->andReturnUsing(
+            function (NewPurchase $event) use (&$attempted, $dispatchFailure) {
+                $attempted[] = $event->purchase->id;
+                $this->assertEmpty(Cart::getCart()->items());
+                if (count($attempted) === 1) {
+                    throw $dispatchFailure;
+                }
+            }
+        );
+
+        $reserved = [];
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldReceive('reservePurchase')->twice()->andReturnUsing(
+            function (Purchase $purchase) use (&$reserved) {
+                $reserved[] = $purchase->id;
+                return new \App\WalletEscrowHold();
+            }
+        );
+        DB::shouldReceive('transaction')->once()->andReturnUsing(function ($callback) {
+            return $callback();
+        });
+
+        (new CheckoutNoRecoveryRequestDouble())->persist($ledger);
+
+        $this->assertSame(['event-first-purchase-id', 'event-second-purchase-id'], $reserved);
+        $this->assertSame(['event-first-purchase-id', 'event-second-purchase-id'], $attempted);
+        $this->assertFalse($first->exists);
+        $this->assertFalse($second->exists);
+        $this->assertSame('first message', $first->message);
+        $this->assertSame('second message', $second->message);
+    }
+
+    public function testRecoveredCheckoutEventFailureDoesNotReplayOrBlockLaterPurchases()
+    {
+        $request = new CheckoutRecoveryRequestDouble();
+        foreach (['a-product' => 'recovered-first-id', 'z-product' => 'recovered-second-id'] as $key => $id) {
+            $purchase = new Purchase();
+            $purchase->forceFill([
+                'id' => $id,
+                'buyer_id' => 'buyer-id',
+                'vendor_id' => 'vendor-id',
+                'offer_id' => 'offer-id',
+                'shipping_id' => null,
+                'quantity' => 1,
+                'coin_name' => 'btc',
+                'type' => 'normal',
+            ]);
+            session()->put(Cart::SESSION_NAME . '.' . $key, $purchase);
+
+            $committed = new Purchase();
+            $committed->forceFill($purchase->getAttributes());
+            $committed->exists = true;
+            $committed->setRelation('buyer', (object) ['id' => 'buyer-id']);
+            $committed->setRelation('vendor', (object) ['id' => 'vendor-id']);
+            $committed->setRelation('offer', (object) ['product' => (object) ['id' => $key]]);
+            $request->committedPurchases[$id] = $committed;
+        }
+
+        $dispatchFailure = new \RuntimeException('recovery event failed');
+        $reporter = Mockery::mock(ExceptionHandler::class);
+        $reporter->shouldReceive('report')->once()->with($dispatchFailure);
+        app()->instance(ExceptionHandler::class, $reporter);
+
+        $attempted = [];
+        Event::shouldReceive('dispatch')->twice()->andReturnUsing(
+            function (NewPurchase $event) use (&$attempted, $dispatchFailure) {
+                $attempted[] = $event->purchase->id;
+                $this->assertEmpty(Cart::getCart()->items());
+                if (count($attempted) === 1) {
+                    throw $dispatchFailure;
+                }
+            }
+        );
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+
+        $request->persist($ledger);
+
+        $this->assertSame(['recovered-first-id', 'recovered-second-id'], $attempted);
     }
 
     public function testEmptyCartRejectsCheckoutBeforeOpeningTransaction()

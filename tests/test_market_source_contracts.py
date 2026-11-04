@@ -871,6 +871,19 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertIn(type_guard, cart)
         self.assertLess(cart.index(type_guard), cart.index(purchase))
 
+    def test_checkout_reports_each_event_failure_inside_the_purchase_loop(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        loop = source[source.index("foreach ($purchases as $purchase)"):]
+
+        self.assertIn("event(new NewPurchase($purchase));", loop)
+        self.assertIn("catch (\\Exception $exception)", loop)
+        self.assertIn("report($exception);", loop)
+        self.assertLess(loop.index("foreach ($purchases as $purchase)"), loop.index("try {"))
+        self.assertLess(loop.index("try {"), loop.index("event(new NewPurchase($purchase));"))
+        self.assertLess(loop.index("event(new NewPurchase($purchase));"), loop.index("catch (\\Exception $exception)"))
+
 if __name__ == "__main__":
     unittest.main()
 

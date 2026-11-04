@@ -135,3 +135,5 @@ violations fail closed. This is conservative classifier hardening, not a durable
 request key, simultaneous-first-submit proof, or transactional outbox.
 
 Locked checkout selection coverage now rejects a product-unsupported coin, a product-unsupported or disabled purchase type, and an offer tier whose minimum exceeds the requested quantity. The source contract fixes this check before Payment construction, while cart creation applies the same product-type registry before creating a Purchase. These tests do not contact a wallet or RPC service.
+
+Checkout post-commit event coverage now exercises two-purchase normal and recovery paths. If the first `NewPurchase` dispatch throws, the exact exception is reported and the second purchase is still attempted after the cart has been cleared. The recovery path opens no transaction and makes no reservation. This verifies best-effort continuation only; it does not make event delivery durable or exactly once.
