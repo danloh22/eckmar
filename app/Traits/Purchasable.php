@@ -136,6 +136,7 @@ trait Purchasable {
     protected function lockAndValidateCheckoutShipping(Product $product)
     {
         $shippingId = $this->getAttribute('shipping_id');
+        $this->validateLockedCheckoutShippingPresence($product, $shippingId);
         if ($shippingId === null) {
             return null;
         }
@@ -154,6 +155,15 @@ trait Purchasable {
         $this->validateLockedCheckoutShipping($shipping);
 
         return $shipping;
+    }
+
+    protected function validateLockedCheckoutShippingPresence(Product $product, $shippingId)
+    {
+        if ($product->isPhysical() && $shippingId === null) {
+            throw new RequestException(
+                'A shipping option is required for physical products. Please add the product again.'
+            );
+        }
     }
 
     protected function validateLockedCheckoutShipping(Shipping $shipping)

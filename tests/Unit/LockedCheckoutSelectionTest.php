@@ -92,6 +92,32 @@ class LockedCheckoutSelectionTest extends TestCase
             'quantity above current shipping maximum' => [11, 3, 10],
         ];
     }
+
+    public function testPhysicalProductWithoutShippingIsRejectedBeforePaymentResolution()
+    {
+        $purchase = new LockedCheckoutSelectionProbe('btc', 'normal', 2);
+
+        try {
+            $purchase->validateShippingPresence(new LockedCheckoutProductProbe(true), null);
+            $this->fail('Physical checkout without shipping must fail closed.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'A shipping option is required for physical products. Please add the product again.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertFalse($purchase->paymentResolved);
+    }
+
+    public function testDigitalProductWithoutShippingRemainsSupported()
+    {
+        $purchase = new LockedCheckoutSelectionProbe('btc', 'normal', 2);
+
+        $purchase->validateShippingPresence(new LockedCheckoutProductProbe(false), null);
+
+        $this->assertTrue($purchase->paymentResolved);
+    }
 }
 
 class LockedCheckoutSelectionProbe
@@ -120,5 +146,27 @@ class LockedCheckoutSelectionProbe
     {
         $this->validateLockedCheckoutShipping($shipping);
         $this->paymentResolved = true;
+    }
+
+    public function validateShippingPresence(Product $product, $shippingId)
+    {
+        $this->validateLockedCheckoutShippingPresence($product, $shippingId);
+        $this->paymentResolved = true;
+    }
+}
+
+class LockedCheckoutProductProbe extends Product
+{
+    private $physical;
+
+    public function __construct($physical)
+    {
+        parent::__construct();
+        $this->physical = $physical;
+    }
+
+    public function isPhysical()
+    {
+        return $this->physical;
     }
 }

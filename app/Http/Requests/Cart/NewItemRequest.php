@@ -47,11 +47,18 @@ class NewItemRequest extends FormRequest
 
         throw_if($isOwner, new RequestException('You can\'t put your products in cart!'));
         // select shipping
-        if($product -> isPhysical())
+        if($product -> isPhysical()) {
+            if (!$this->delivery) {
+                throw new RequestException('A shipping option is required for physical products!');
+            }
             $shipping = $product -> specificProduct() -> shippings()
                 -> where('id', $this -> delivery)
                 -> where('deleted', '=', 0) // is not deleted
                 -> first();
+            if (!$shipping) {
+                throw new RequestException('Selected shipping is not available for this product!');
+            }
+        }
         Cart::getCart() -> addToCart($product, $this -> amount, $this -> coin, $shipping, $this -> message, $this -> type);
     }
 }

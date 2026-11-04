@@ -842,6 +842,8 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertIn("->lockForUpdate()", shipping)
         self.assertIn("$shipping->from_quantity > $this->quantity", shipping)
         self.assertIn("$shipping->to_quantity < $this->quantity", shipping)
+        self.assertIn("validateLockedCheckoutShippingPresence($product, $shippingId)", shipping)
+        self.assertIn("$product->isPhysical() && $shippingId === null", shipping)
 
         shipping_call = purchased.index('$shipping = $this->lockAndValidateCheckoutShipping($product);')
         payment = purchased.index('app() -> makeWith')
@@ -850,6 +852,12 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         cart = (
             self.root / "app/Marketplace/Cart.php"
         ).read_text(encoding="utf-8")
+        request = (
+            self.root / "app/Http/Requests/Cart/NewItemRequest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn("if (!$this->delivery)", request)
+        self.assertIn("if (!$shipping)", request)
+        self.assertIn("$product -> isPhysical() && $shipping === null", cart)
         type_guard = "in_array($type, $product -> getTypes(), true)"
         purchase = "$newCartItem = new Purchase;"
         self.assertIn(type_guard, cart)

@@ -79,6 +79,8 @@ class Cart
      */
     public function addToCart(Product $product, int $quantity, string $coin, ?Shipping $shipping = null, string $message = null, $type = 'normal')
     {
+        if($product -> isPhysical() && $shipping === null)
+            throw new RequestException('A shipping option is required for physical products!');
         // validate shipping
         if(!$this -> validShipping($shipping, $quantity))
             throw new RequestException('Quantity must be in range of selected shipping option!');
