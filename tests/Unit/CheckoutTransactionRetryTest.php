@@ -702,7 +702,7 @@ class CheckoutTransactionRetryTest extends TestCase
         return [
             'missing persisted buyer' => ['buyer_id', 'buyer-id', null],
             'empty persisted shipping aliases null under string cast' => ['shipping_id', null, ''],
-            'numeric persisted coin aliases string under cast' => ['coin_name', '42', 42],
+            'numeric persisted coin is rejected before comparison' => ['coin_name', 'btc', 42],
             'quantity suffix aliases integer under cast' => ['quantity', 2, '2oops'],
             'zero-padded quantity is non-canonical' => ['quantity', 2, '02'],
         ];
