@@ -38,6 +38,7 @@ trait Purchasable {
 
         list($offer, $product) = $this->lockActiveOfferAndProduct();
         throw_unless($product->active, new RequestException('This product is no longer available.'));
+        $this->validateLockedCheckoutSelection($offer, $product);
         $offer->setRelation('product', $product);
         $this->setRelation('offer', $offer);
 
@@ -106,6 +107,28 @@ trait Purchasable {
         }
 
         return [$offer, $product];
+    }
+
+    /**
+     * Revalidate session selections against the rows held by checkout locks.
+     */
+    protected function validateLockedCheckoutSelection(Offer $offer, Product $product)
+    {
+        if (!$product->supportsCoin($this->coin_name)) {
+            throw new RequestException(
+                'Selected coin is no longer supported by this product. Please add the product again.'
+            );
+        }
+        if (!in_array($this->type, $product->getTypes(), true)) {
+            throw new RequestException(
+                'Selected purchase type is no longer supported by this product. Please add the product again.'
+            );
+        }
+        if ((int) $offer->min_quantity > $this->quantity) {
+            throw new RequestException(
+                'Selected offer no longer applies to this quantity. Please add the product again.'
+            );
+        }
     }
 
     private function markingAsSent(){

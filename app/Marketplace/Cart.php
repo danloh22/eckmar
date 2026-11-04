@@ -88,6 +88,9 @@ class Cart
         // validate coins
         if(!$product -> supportsCoin($coin))
             throw new RequestException('Selected coin payment is not supported by this product!');
+        // validate purchase type, including runtime-disabled Finalize Early
+        if(!in_array($type, $product -> getTypes(), true))
+            throw new RequestException('Selected purchase type is not supported by this product!');
 
         // make the purchase
         $newCartItem = new Purchase;

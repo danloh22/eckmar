@@ -811,6 +811,35 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertLess(preflight.index(coin_guard), preflight.index(buyer_lookup))
         self.assertLess(preflight.index(type_guard), preflight.index(buyer_lookup))
 
+    def test_locked_checkout_selection_is_revalidated_before_payment(self):
+        source = (
+            self.root / "app/Traits/Purchasable.php"
+        ).read_text(encoding="utf-8")
+        purchased_start = source.index("public function purchased()")
+        resolver_start = source.index("protected function lockActiveOfferAndProduct()")
+        purchased = source[purchased_start:resolver_start]
+
+        validation = "$this->validateLockedCheckoutSelection($offer, $product);"
+        payment = "app() -> makeWith(\\App\\Marketplace\\Payment\\Payment::class"
+        self.assertIn(validation, purchased)
+        self.assertIn(payment, purchased)
+        self.assertLess(purchased.index(validation), purchased.index(payment))
+
+        validator_start = source.index("protected function validateLockedCheckoutSelection")
+        validator_end = source.index("private function markingAsSent", validator_start)
+        validator = source[validator_start:validator_end]
+        self.assertIn("$product->supportsCoin($this->coin_name)", validator)
+        self.assertIn("in_array($this->type, $product->getTypes(), true)", validator)
+        self.assertIn("(int) $offer->min_quantity > $this->quantity", validator)
+
+        cart = (
+            self.root / "app/Marketplace/Cart.php"
+        ).read_text(encoding="utf-8")
+        type_guard = "in_array($type, $product -> getTypes(), true)"
+        purchase = "$newCartItem = new Purchase;"
+        self.assertIn(type_guard, cart)
+        self.assertLess(cart.index(type_guard), cart.index(purchase))
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -1,0 +1,82 @@
+<?php
+
+namespace Tests\Unit;
+
+use App\Exceptions\RequestException;
+use App\Offer;
+use App\Product;
+use App\Traits\Purchasable;
+use Tests\TestCase;
+
+class LockedCheckoutSelectionTest extends TestCase
+{
+    /**
+     * @dataProvider invalidLockedSelectionValues
+     */
+    public function testLockedSelectionIsRejectedBeforePaymentResolution(
+        $coin,
+        $type,
+        $quantity,
+        $minimumQuantity,
+        $expectedMessage
+    ) {
+        $product = new Product();
+        $product->coins = 'btc,xmr';
+        $product->types = 'normal';
+
+        $offer = new Offer();
+        $offer->min_quantity = $minimumQuantity;
+
+        $purchase = new LockedCheckoutSelectionProbe($coin, $type, $quantity);
+
+        try {
+            $purchase->validate($offer, $product);
+            $this->fail('Invalid locked checkout selection must fail closed.');
+        } catch (RequestException $exception) {
+            $this->assertSame($expectedMessage, $exception->getMessage());
+        }
+
+        $this->assertFalse($purchase->paymentResolved);
+    }
+
+    public function invalidLockedSelectionValues()
+    {
+        return [
+            'unsupported coin' => [
+                'ltc', 'normal', 2, 1,
+                'Selected coin is no longer supported by this product. Please add the product again.',
+            ],
+            'unsupported purchase type' => [
+                'btc', 'fe', 2, 1,
+                'Selected purchase type is no longer supported by this product. Please add the product again.',
+            ],
+            'offer minimum exceeds quantity' => [
+                'btc', 'normal', 2, 3,
+                'Selected offer no longer applies to this quantity. Please add the product again.',
+            ],
+        ];
+    }
+}
+
+class LockedCheckoutSelectionProbe
+{
+    use Purchasable;
+
+    public $coin_name;
+    public $type;
+    public $quantity;
+    public $paymentResolved = false;
+
+    public function __construct($coin, $type, $quantity)
+    {
+        $this->coin_name = $coin;
+        $this->type = $type;
+        $this->quantity = $quantity;
+    }
+
+    public function validate(Offer $offer, Product $product)
+    {
+        $this->validateLockedCheckoutSelection($offer, $product);
+        $this->paymentResolved = true;
+    }
+}
