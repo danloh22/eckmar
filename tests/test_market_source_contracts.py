@@ -832,6 +832,21 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertIn("in_array($this->type, $product->getTypes(), true)", validator)
         self.assertIn("(int) $offer->min_quantity > $this->quantity", validator)
 
+        shipping = source[
+            source.index("protected function lockAndValidateCheckoutShipping"):
+            source.index("private function markingAsSent")
+        ]
+        self.assertIn("$this->getAttribute('shipping_id')", shipping)
+        self.assertIn("->where('product_id', $product->id)", shipping)
+        self.assertIn("->where('deleted', '=', 0)", shipping)
+        self.assertIn("->lockForUpdate()", shipping)
+        self.assertIn("$shipping->from_quantity > $this->quantity", shipping)
+        self.assertIn("$shipping->to_quantity < $this->quantity", shipping)
+
+        shipping_call = purchased.index('$shipping = $this->lockAndValidateCheckoutShipping($product);')
+        payment = purchased.index('app() -> makeWith')
+        self.assertLess(shipping_call, payment)
+
         cart = (
             self.root / "app/Marketplace/Cart.php"
         ).read_text(encoding="utf-8")

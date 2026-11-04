@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Exceptions\RequestException;
 use App\Offer;
 use App\Product;
+use App\Shipping;
 use App\Traits\Purchasable;
 use Tests\TestCase;
 
@@ -56,6 +57,41 @@ class LockedCheckoutSelectionTest extends TestCase
             ],
         ];
     }
+
+    /**
+     * @dataProvider invalidLockedShippingRanges
+     */
+    public function testLockedShippingRangeIsRejectedBeforePaymentResolution(
+        $quantity,
+        $fromQuantity,
+        $toQuantity
+    ) {
+        $shipping = new Shipping();
+        $shipping->from_quantity = $fromQuantity;
+        $shipping->to_quantity = $toQuantity;
+
+        $purchase = new LockedCheckoutSelectionProbe('btc', 'normal', $quantity);
+
+        try {
+            $purchase->validateShipping($shipping);
+            $this->fail('Invalid locked shipping range must fail closed.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Selected shipping no longer applies to this quantity. Please add the product again.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertFalse($purchase->paymentResolved);
+    }
+
+    public function invalidLockedShippingRanges()
+    {
+        return [
+            'quantity below current shipping minimum' => [2, 3, 10],
+            'quantity above current shipping maximum' => [11, 3, 10],
+        ];
+    }
 }
 
 class LockedCheckoutSelectionProbe
@@ -77,6 +113,12 @@ class LockedCheckoutSelectionProbe
     public function validate(Offer $offer, Product $product)
     {
         $this->validateLockedCheckoutSelection($offer, $product);
+        $this->paymentResolved = true;
+    }
+
+    public function validateShipping(Shipping $shipping)
+    {
+        $this->validateLockedCheckoutShipping($shipping);
         $this->paymentResolved = true;
     }
 }

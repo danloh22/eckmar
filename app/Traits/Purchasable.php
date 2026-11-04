@@ -29,18 +29,15 @@ trait Purchasable {
      */
     public function purchased()
     {
-        // check if shipping is not deleted in the mean time
-        // shipping is deleted between adding to cart and checkout
-        if($this->shipping && Shipping::where('id',$this->shipping->id)->where('deleted', '=', 1)->exists()){
-            Cart::getCart()->clearCart(); // clear cart
-            throw new RequestException('Selected shipping is deleted, please add the product again.');
-        }
-
         list($offer, $product) = $this->lockActiveOfferAndProduct();
         throw_unless($product->active, new RequestException('This product is no longer available.'));
         $this->validateLockedCheckoutSelection($offer, $product);
+        $shipping = $this->lockAndValidateCheckoutShipping($product);
         $offer->setRelation('product', $product);
         $this->setRelation('offer', $offer);
+        if ($shipping !== null) {
+            $this->setRelation('shipping', $shipping);
+        }
 
         // Generate Payment Service from Service Container
         $this -> payment = app() -> makeWith(\App\Marketplace\Payment\Payment::class, ['purchase' => $this]);
@@ -127,6 +124,44 @@ trait Purchasable {
         if ((int) $offer->min_quantity > $this->quantity) {
             throw new RequestException(
                 'Selected offer no longer applies to this quantity. Please add the product again.'
+            );
+        }
+    }
+
+    /**
+     * Reload and lock the selected shipping row after the owning product lock.
+     * Session relations may be stale when shipping is deleted, moved to another
+     * product, or its quantity range changes before checkout.
+     */
+    protected function lockAndValidateCheckoutShipping(Product $product)
+    {
+        $shippingId = $this->getAttribute('shipping_id');
+        if ($shippingId === null) {
+            return null;
+        }
+
+        $shipping = Shipping::where('id', $shippingId)
+            ->where('product_id', $product->id)
+            ->where('deleted', '=', 0)
+            ->lockForUpdate()
+            ->first();
+        if (!$shipping) {
+            throw new RequestException(
+                'Selected shipping is no longer available. Please add the product again.'
+            );
+        }
+
+        $this->validateLockedCheckoutShipping($shipping);
+
+        return $shipping;
+    }
+
+    protected function validateLockedCheckoutShipping(Shipping $shipping)
+    {
+        if ($shipping->from_quantity > $this->quantity
+            || $shipping->to_quantity < $this->quantity) {
+            throw new RequestException(
+                'Selected shipping no longer applies to this quantity. Please add the product again.'
             );
         }
     }
