@@ -128,4 +128,10 @@ Committed rows found during sequential, duplicate-key or ambiguous-commit recove
 
 Checkout identity preflight also rejects canonical-looking but unsupported coin names and purchase types before recovery lookup, ledger resolution or transaction work. The regression extends the existing invalid-identity provider with values absent from `coins.coin_list` and `Purchase::$types`, preserves the cart and dispatches no purchase event. No wallet or RPC service is contacted.
 
+Duplicate-key checkout recovery now requires an exact purchase primary-key signature. MySQL's
+unqualified `PRIMARY` is additionally bound to a Laravel `QueryException` whose SQL is an insert
+into `purchases`; bare PDO errors, other tables, constraint-name suffixes and composite SQLite
+violations fail closed. This is conservative classifier hardening, not a durable buyer-bound
+request key, simultaneous-first-submit proof, or transactional outbox.
+
 Locked checkout selection coverage now rejects a product-unsupported coin, a product-unsupported or disabled purchase type, and an offer tier whose minimum exceeds the requested quantity. The source contract fixes this check before Payment construction, while cart creation applies the same product-type registry before creating a Purchase. These tests do not contact a wallet or RPC service.

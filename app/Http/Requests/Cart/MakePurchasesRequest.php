@@ -273,20 +273,58 @@ class MakePurchasesRequest extends FormRequest
             $driverCode = isset($errorInfo[1]) ? (string) $errorInfo[1] : '';
             $message = strtolower($current->getMessage());
 
+            $mysqlQualifiedPrimary = preg_match(
+                '/for key\s+([`\'\"]?)purchases\.primary\\1(?:\s|$)/',
+                $message
+            ) === 1;
+            $mysqlUnqualifiedPrimary = preg_match(
+                '/for key\s+([`\'\"]?)primary\\1(?:\s|$)/',
+                $message
+            ) === 1;
+            $postgresPurchasePrimary = preg_match(
+                '/unique constraint\s+([`\'\"]?)purchases_pkey\\1(?:\s|$)/',
+                $message
+            ) === 1;
+            $sqlitePurchasePrimary = preg_match(
+                '/unique constraint failed:\s*purchases\.id(?:\s*$|\s+\(sql:)/',
+                $message
+            ) === 1;
+
             if (($sqlState === '23000'
                     && $driverCode === '1062'
-                    && (strpos($message, "for key 'primary'") !== false
-                        || strpos($message, "for key 'purchases.primary'") !== false
-                        || strpos($message, 'for key `primary`') !== false
-                        || strpos($message, 'for key `purchases.primary`') !== false
-                        || strpos($message, 'for key primary') !== false
-                        || strpos($message, 'for key purchases.primary') !== false))
+                    && ($mysqlQualifiedPrimary
+                        || ($mysqlUnqualifiedPrimary
+                            && $this->isPurchaseInsertFailure($exception))))
                 || ($sqlState === '23505'
-                    && strpos($message, 'purchases_pkey') !== false)
+                    && $postgresPurchasePrimary)
                 || ($sqlState === '23000'
                     && $driverCode === '19'
-                    && strpos($message, 'unique constraint failed: purchases.id') !== false)
+                    && $sqlitePurchasePrimary)
             ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * MySQL reports an unqualified PRIMARY key name for every table. Accept it
+     * only when Laravel's QueryException proves the failed statement inserted
+     * into purchases; a bare PDOException cannot establish that provenance.
+     */
+    protected function isPurchaseInsertFailure(\Exception $exception)
+    {
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            if (!method_exists($current, 'getSql')) {
+                continue;
+            }
+
+            $sql = ltrim((string) $current->getSql());
+            if (preg_match(
+                '/^insert\s+into\s+(?:(?:`?[a-z0-9_]+`?)\.)?`?purchases`?(?:\s|\()/i',
+                $sql
+            ) === 1) {
                 return true;
             }
         }

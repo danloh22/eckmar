@@ -425,12 +425,16 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
 
         self.assertIn("$sqlState === '23000'", classifier)
         self.assertIn("$driverCode === '1062'", classifier)
-        self.assertIn("for key 'purchases.primary'", classifier)
-        self.assertIn("for key `purchases.primary`", classifier)
+        self.assertIn("$mysqlQualifiedPrimary", classifier)
+        self.assertIn("$mysqlUnqualifiedPrimary", classifier)
+        self.assertIn("$this->isPurchaseInsertFailure($exception)", classifier)
         self.assertIn("$sqlState === '23505'", classifier)
-        self.assertIn("purchases_pkey", classifier)
+        self.assertIn("$postgresPurchasePrimary", classifier)
         self.assertIn("$driverCode === '19'", classifier)
-        self.assertIn("unique constraint failed: purchases.id", classifier)
+        self.assertIn("$sqlitePurchasePrimary", classifier)
+        self.assertIn("protected function isPurchaseInsertFailure", classifier)
+        self.assertIn("method_exists($current, 'getSql')", classifier)
+        self.assertIn("^insert\\s+into", classifier)
         self.assertNotIn("strpos($message, 'duplicate entry')", classifier)
         self.assertNotIn("in_array($code, ['23000', '23505']", classifier)
         checkout_tests = (
@@ -442,6 +446,10 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("'mysql foreign key'", checkout_tests)
         self.assertIn("'deadlock with duplicate-like text'", checkout_tests)
         self.assertIn("'misleading sqlite-like message'", checkout_tests)
+        self.assertIn("'mysql qualified primary suffix lookalike'", checkout_tests)
+        self.assertIn("'postgres primary suffix lookalike'", checkout_tests)
+        self.assertIn("'sqlite composite primary lookalike'", checkout_tests)
+        self.assertIn("testUnqualifiedMysqlPrimaryRequiresPurchaseInsertQuery", checkout_tests)
 
     def test_checkout_ambiguous_commit_recovery_is_read_only_and_fail_closed(self):
         source = (

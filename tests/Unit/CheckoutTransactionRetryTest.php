@@ -810,11 +810,15 @@ class CheckoutTransactionRetryTest extends TestCase
     {
         return [
             'mysql purchase primary key' => ['23000', 1062, "Duplicate entry 'purchase-id' for key 'purchases.PRIMARY'", true],
-            'mysql unqualified primary key' => ['23000', 1062, "Duplicate entry 'purchase-id' for key 'PRIMARY'", true],
+            'mysql bare unqualified primary key' => ['23000', 1062, "Duplicate entry 'purchase-id' for key 'PRIMARY'", false],
             'mysql unquoted qualified primary key' => ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY', true],
             'mysql backtick primary key' => ['23000', 1062, 'Duplicate entry purchase-id for key `purchases.PRIMARY`', true],
             'postgres purchase primary key' => ['23505', 7, 'duplicate key value violates unique constraint "purchases_pkey"', true],
             'sqlite purchase primary key' => ['23000', 19, 'UNIQUE constraint failed: purchases.id', true],
+            'mysql qualified primary suffix lookalike' => ['23000', 1062, 'Duplicate entry for key purchases.PRIMARY_other', false],
+            'mysql primary suffix lookalike' => ['23000', 1062, 'Duplicate entry for key PRIMARY_other', false],
+            'postgres primary suffix lookalike' => ['23505', 7, 'duplicate key value violates unique constraint "purchases_pkey_other"', false],
+            'sqlite composite primary lookalike' => ['23000', 19, 'UNIQUE constraint failed: purchases.id, purchases.other', false],
             'mysql unrelated unique key' => ['23000', 1062, "Duplicate entry 'buyer-btc' for key 'wallets.user_id_coin_unique'", false],
             'postgres unrelated unique key' => ['23505', 7, 'duplicate key value violates unique constraint "wallets_user_coin_key"', false],
             'sqlite unrelated unique key' => ['23000', 19, 'UNIQUE constraint failed: wallets.user_id, wallets.coin', false],
@@ -823,6 +827,29 @@ class CheckoutTransactionRetryTest extends TestCase
             'mysql foreign key' => ['23000', 1452, 'Cannot add or update a child row', false],
             'mysql deadlock' => ['40001', 1213, 'Deadlock found when trying to get lock', false],
         ];
+    }
+
+    public function testUnqualifiedMysqlPrimaryRequiresPurchaseInsertQuery()
+    {
+        $previous = new \PDOException("Duplicate entry 'purchase-id' for key 'PRIMARY'", 23000);
+        $previous->errorInfo = ['23000', 1062, "Duplicate entry 'purchase-id' for key 'PRIMARY'"];
+        $method = new \ReflectionMethod(MakePurchasesRequest::class, 'isDuplicateIdentityFailure');
+        $method->setAccessible(true);
+
+        $purchaseInsert = new \Illuminate\Database\QueryException(
+            'insert into `purchases` (`id`) values (?)',
+            ['purchase-id'],
+            $previous
+        );
+        $walletInsert = new \Illuminate\Database\QueryException(
+            'insert into `wallets` (`id`) values (?)',
+            ['purchase-id'],
+            $previous
+        );
+
+        $request = new MakePurchasesRequest();
+        $this->assertTrue($method->invoke($request, $purchaseInsert));
+        $this->assertFalse($method->invoke($request, $walletInsert));
     }
 
     public function testFailedCheckoutsDoNotReplayOrMutateTheSessionPurchase()
