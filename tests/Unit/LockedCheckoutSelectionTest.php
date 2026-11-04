@@ -159,7 +159,7 @@ class LockedCheckoutProductProbe extends Product
 {
     private $physical;
 
-    public function __construct($physical)
+    public function __construct($physical = false)
     {
         parent::__construct();
         $this->physical = $physical;
