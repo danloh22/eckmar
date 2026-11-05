@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\RemoveProductFromFeaturedReuqest;
 use App\Product;
 use App\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -103,6 +104,31 @@ class AdminFeaturedProductsAuthorizationTest extends TestCase
             $response->assertStatus(302);
             $this->assertFalse((bool) $connection->table('products')
                 ->where('id', 'featured-product')->value('featured'));
+        } finally {
+            $schema->drop('products');
+        }
+    }
+
+    public function testFeaturedRemovalFailsClosedWhenProductDisappearsAfterValidation()
+    {
+        $connection = DB::connection();
+        $schema = $connection->getSchemaBuilder();
+        $schema->create('products', function (Blueprint $table) {
+            $table->string('id')->primary();
+            $table->boolean('featured');
+            $table->timestamps();
+        });
+        $request = RemoveProductFromFeaturedReuqest::create(
+            route('admin.featuredproducts.remove'),
+            'POST',
+            ['product_id' => 'deleted-after-validation']
+        );
+
+        try {
+            $request->persist();
+            $this->fail('A disappeared product must produce a controlled model-not-found failure.');
+        } catch (ModelNotFoundException $exception) {
+            $this->assertSame(Product::class, $exception->getModel());
         } finally {
             $schema->drop('products');
         }

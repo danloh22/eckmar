@@ -902,6 +902,22 @@ class FeaturedProductAuthorizationSourceContractTest(unittest.TestCase):
         self.assertLess(method.index(authorization), method.index(lookup))
 
 
+class FeaturedProductRemovalSourceContractTest(unittest.TestCase):
+    def test_featured_removal_fails_closed_when_validated_product_disappears(self):
+        root = Path(__file__).resolve().parents[1]
+        source = (
+            root / "app/Http/Requests/Admin/RemoveProductFromFeaturedReuqest.php"
+        ).read_text(encoding="utf-8")
+        persist = source[source.index("public function persist()"):]
+
+        self.assertIn("Product::findOrFail($this->product_id)", persist)
+        self.assertNotIn("->first()", persist)
+        self.assertLess(
+            persist.index("Product::findOrFail($this->product_id)"),
+            persist.index("$product->featured = false;"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
 

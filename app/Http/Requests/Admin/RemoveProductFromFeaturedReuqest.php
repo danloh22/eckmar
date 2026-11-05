@@ -36,7 +36,7 @@ class RemoveProductFromFeaturedReuqest extends FormRequest
         ];
     }
     public function persist(){
-        $product = Product::where('id',$this->product_id)->first();
+        $product = Product::findOrFail($this->product_id);
         $product->featured = false;
         $product->save();
         session() -> flash('success', 'You have successfully removed product from list of featured products');
