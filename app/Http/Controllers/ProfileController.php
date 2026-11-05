@@ -506,8 +506,12 @@ class ProfileController extends Controller
     public function newDisputeMessage(NewDisputeMessageRequest $request, Dispute $dispute)
     {
         try{
-            $dispute -> newMessage($request -> message);
-            event(new ProductDisputeNewMessageSent($dispute->purchase,auth()->user()));
+            $newMessage = $dispute -> newMessage($request -> message);
+            event(new ProductDisputeNewMessageSent(
+                $dispute->purchase,
+                auth()->user(),
+                $newMessage->id
+            ));
             session() -> flash('success', 'You have successfully posted new message for dispute!');
         }
         catch (RequestException $e){

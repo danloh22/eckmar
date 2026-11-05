@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Product;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 class RemoveProductFromFeaturedReuqest extends FormRequest
@@ -36,9 +37,13 @@ class RemoveProductFromFeaturedReuqest extends FormRequest
         ];
     }
     public function persist(){
-        $product = Product::where('id',$this->product_id)->first();
-        $product->featured = false;
-        $product->save();
+        DB::transaction(function () {
+            $product = Product::whereKey($this->product_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $product->featured = false;
+            $product->save();
+        });
         session() -> flash('success', 'You have successfully removed product from list of featured products');
 
     }

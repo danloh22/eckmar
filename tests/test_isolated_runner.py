@@ -15,10 +15,12 @@ class IsolatedRunnerTest(unittest.TestCase):
         (self.root / "scripts").mkdir()
         self.runner = self.root / "scripts/test-isolated.sh"
         shutil.copyfile(Path(__file__).resolve().parents[1] / "scripts/test-isolated.sh", self.runner)
-        for name in ("composer.lock", "phpunit.xml", "vendor/autoload.php", "vendor/bin/phpunit"):
+        for name in ("composer.lock", "phpunit.xml", "vendor/autoload.php",
+                     "vendor/phpunit/phpunit/phpunit"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.touch()
+        (self.root / "vendor/bin").mkdir()
         (self.root / "bin").mkdir()
         self.php = self.root / "bin/php"
         self.php.write_text("#!/bin/bash\nprintf 'PHP_STAND_IN_CALLED\\n'\n", encoding="utf-8")
@@ -143,7 +145,8 @@ class IsolatedRunnerTest(unittest.TestCase):
                 path.unlink()
 
     def test_refuses_missing_locked_dependencies_before_php(self):
-        for name in ("composer.lock", "phpunit.xml", "vendor/autoload.php", "vendor/bin/phpunit"):
+        for name in ("composer.lock", "phpunit.xml", "vendor/autoload.php",
+                     "vendor/phpunit/phpunit/phpunit"):
             with self.subTest(name=name):
                 path = self.root / name
                 path.unlink()
@@ -156,7 +159,8 @@ class IsolatedRunnerTest(unittest.TestCase):
     def test_refuses_symlinked_locked_dependencies_before_php(self):
         target = self.root / "external-artifact"
         target.touch()
-        for name in ("composer.lock", "phpunit.xml", "vendor/autoload.php", "vendor/bin/phpunit"):
+        for name in ("composer.lock", "phpunit.xml", "vendor/autoload.php",
+                     "vendor/phpunit/phpunit/phpunit"):
             with self.subTest(name=name):
                 path = self.root / name
                 path.unlink()
@@ -206,7 +210,7 @@ set -eu
 [[ "$APP_ENV" == testing && "$DB_CONNECTION" == sqlite && "$DB_DATABASE" == :memory: ]]
 [[ "$CACHE_DRIVER" == array && "$SESSION_DRIVER" == array && "$MAIL_DRIVER" == array && "$QUEUE_DRIVER" == sync ]]
 [[ "$1" == -r ]] && exit 0
-[[ "$#" == 3 && "$1" == "$PWD/vendor/bin/phpunit" && "$2" == --configuration && "$3" == "$PWD/phpunit.xml" ]]
+[[ "$#" == 3 && "$1" == "$PWD/vendor/phpunit/phpunit/phpunit" && "$2" == --configuration && "$3" == "$PWD/phpunit.xml" ]]
 printf 'SANITIZED_RUNNER_CONTRACT_OK\\n'
 ''', encoding="utf-8")
         result = self.run_script()

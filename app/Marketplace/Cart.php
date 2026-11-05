@@ -79,6 +79,8 @@ class Cart
      */
     public function addToCart(Product $product, int $quantity, string $coin, ?Shipping $shipping = null, string $message = null, $type = 'normal')
     {
+        if($product -> isPhysical() && $shipping === null)
+            throw new RequestException('A shipping option is required for physical products!');
         // validate shipping
         if(!$this -> validShipping($shipping, $quantity))
             throw new RequestException('Quantity must be in range of selected shipping option!');
@@ -88,6 +90,9 @@ class Cart
         // validate coins
         if(!$product -> supportsCoin($coin))
             throw new RequestException('Selected coin payment is not supported by this product!');
+        // validate purchase type, including runtime-disabled Finalize Early
+        if(!in_array($type, $product -> getTypes(), true))
+            throw new RequestException('Selected purchase type is not supported by this product!');
 
         // make the purchase
         $newCartItem = new Purchase;

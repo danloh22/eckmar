@@ -40,6 +40,27 @@ class DraftOfferSessionTest extends TestCase
         $this->assertSame([$one, $five], session('product_offers')->all());
     }
 
+    /** @dataProvider invalidRemovalQuantities */
+    public function testRemoveOfferRejectsNonCanonicalQuantities($quantity)
+    {
+        $one = $this->offer(1);
+        $five = $this->offer(5);
+        session()->put('product_offers', collect([$one, $five]));
+
+        $this->controllerWithCreatePermission()->removeOffer($quantity);
+
+        $this->assertSame([$one, $five], session('product_offers')->all());
+        $this->assertSame(
+            'The offer quantity must be a canonical positive integer.',
+            session('errormessage')
+        );
+    }
+
+    public function invalidRemovalQuantities()
+    {
+        return [['1abc'], ['01'], ['0'], ['-1'], ['2147483648']];
+    }
+
     /** @dataProvider duplicateKeys */
     public function testPersistRejectsDuplicateQuantitiesAtZeroAndSparseCollectionKeys($key)
     {
