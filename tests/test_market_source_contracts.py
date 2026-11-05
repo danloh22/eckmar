@@ -910,11 +910,19 @@ class FeaturedProductRemovalSourceContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         persist = source[source.index("public function persist()"):]
 
-        self.assertIn("Product::findOrFail($this->product_id)", persist)
-        self.assertNotIn("->first()", persist)
+        transaction = "DB::transaction(function ()"
+        lookup = "Product::whereKey($this->product_id)"
+        lock = "->lockForUpdate()"
+        missing_guard = "->firstOrFail()"
+        mutation = "$product->featured = false;"
+
+        for contract in (transaction, lookup, lock, missing_guard, mutation):
+            self.assertIn(contract, persist)
+        self.assertLess(persist.index(transaction), persist.index(lookup))
+        self.assertLess(persist.index(lookup), persist.index(lock))
+        self.assertLess(persist.index(lock), persist.index(missing_guard))
         self.assertLess(
-            persist.index("Product::findOrFail($this->product_id)"),
-            persist.index("$product->featured = false;"),
+            persist.index(missing_guard), persist.index(mutation)
         )
 
 
