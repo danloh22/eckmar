@@ -884,6 +884,24 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         self.assertLess(loop.index("try {"), loop.index("event(new NewPurchase($purchase));"))
         self.assertLess(loop.index("event(new NewPurchase($purchase));"), loop.index("catch (\\Exception $exception)"))
 
+class FeaturedProductAuthorizationSourceContractTest(unittest.TestCase):
+    def test_featured_mark_authorizes_before_product_lookup(self):
+        root = Path(__file__).resolve().parents[1]
+        source = (
+            root / "app/Http/Controllers/Admin/ProductController.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("public function markAsFeatured")
+        method = source[start:]
+
+        signature = "public function markAsFeatured($product)"
+        authorization = "$this -> checkProducts();"
+        lookup = "$product = Product::findOrFail($product);"
+        self.assertIn(signature, method)
+        self.assertIn(authorization, method)
+        self.assertIn(lookup, method)
+        self.assertLess(method.index(authorization), method.index(lookup))
+
+
 if __name__ == "__main__":
     unittest.main()
 

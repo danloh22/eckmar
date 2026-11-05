@@ -36,6 +36,18 @@ class AdminFeaturedProductsAuthorizationTest extends TestCase
         }
     }
 
+    public function testUnrelatedModeratorCannotResolveProductBeforeFeaturedMarkAuthorization()
+    {
+        $this->signInStaff(false, ['categories']);
+        // No products table exists: authorization must fail before route input is resolved.
+        try {
+            (new ProductController())->markAsFeatured('missing-product');
+            $this->fail('A category moderator must not mark products as featured.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+    }
+
     public function authorizedStaff()
     {
         return [[false, ['products']], [true, []]];
