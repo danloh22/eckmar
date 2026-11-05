@@ -154,3 +154,10 @@ invalid configuration. Combined local verification ran 52 Python contract tests
 successfully, plus clean shell syntax, YAML parsing and diff checks. These are bootstrap
 contracts, not PHP application results; the current GitHub PHP suite remains unverified
 until a new workflow reaches PHPUnit.
+
+
+The first CI execution also proved that an index-download warning can otherwise leave
+APT with no package candidates. The helper therefore treats index warnings as errors
+with `APT::Update::Error-Mode=any` and retries update plus install together. Its tests
+now separately model update failure and install failure; 53 combined local contracts
+pass after the refinement. The failed CI runs did not reach Composer or PHPUnit.

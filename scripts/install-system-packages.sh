@@ -14,14 +14,15 @@ esac
 
 attempt=1
 while :; do
-  if DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y --no-install-recommends "$@"; then
+  if apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update && \
+     DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y --no-install-recommends "$@"; then
     exit 0
   fi
   if [ "$attempt" -ge "$max_attempts" ]; then
-    echo "apt-get install failed after $attempt attempt(s)" >&2
+    echo "apt package bootstrap failed after $attempt attempt(s)" >&2
     exit 1
   fi
-  echo "apt-get install attempt $attempt failed; retrying" >&2
+  echo "apt package bootstrap attempt $attempt failed; retrying" >&2
   sleep "$retry_delay"
   attempt=$((attempt + 1))
 done
