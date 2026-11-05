@@ -925,6 +925,36 @@ class FeaturedProductRemovalSourceContractTest(unittest.TestCase):
             persist.index(missing_guard), persist.index(mutation)
         )
 
+    def test_featured_removal_delete_race_uses_production_request_without_wallets(self):
+        root = Path(__file__).resolve().parents[1]
+        mysql_test = (
+            root / "tests/Integration/MySqlWalletEscrowIntegrationTest.php"
+        ).read_text(encoding="utf-8")
+        removal_worker = (
+            root / "tests/Integration/fixtures/mysql_featured_removal_worker.php"
+        ).read_text(encoding="utf-8")
+        delete_worker = (
+            root / "tests/Integration/fixtures/mysql_product_delete_hold_worker.php"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "testFeaturedRemovalWaitsForConcurrentDeleteAndFailsClosed",
+            mysql_test,
+        )
+        self.assertIn("startHeldProductDeleteWorker", mysql_test)
+        self.assertIn("startFeaturedRemovalWorker", mysql_test)
+        self.assertIn("assertFileNotExists(\n                $removalDone", mysql_test)
+        self.assertIn("$this->assertSame('missing', $removal['status']);", mysql_test)
+        self.assertIn("RemoveProductFromFeaturedReuqest::create", removal_worker)
+        self.assertIn("$request->persist();", removal_worker)
+        self.assertIn("catch (ModelNotFoundException $expected)", removal_worker)
+        self.assertIn("DB::transaction", delete_worker)
+        self.assertIn("delete from `products`", delete_worker)
+        self.assertNotIn("Wallet", removal_worker)
+        self.assertNotIn("Payment", removal_worker)
+        self.assertNotIn("Wallet", delete_worker)
+        self.assertNotIn("Payment", delete_worker)
+
 
 if __name__ == "__main__":
     unittest.main()

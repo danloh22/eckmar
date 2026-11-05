@@ -168,3 +168,14 @@ and two errors in the new event-continuation tests. Both errors arose while lega
 Mockery generated the `ExceptionHandler` interface mock. The tests now use an explicit
 recording handler double and assert the same exception object is reported. This is a
 test-runtime compatibility correction; checkout production behavior is unchanged.
+
+## Featured removal/delete concurrency — 5 November 2026
+
+The disposable MySQL suite now runs a deterministic two-process race between product
+deletion and the production featured-removal request. The deleting worker holds its
+transaction after deleting the row; featured removal must wait on the same product row,
+then return the controlled missing-model result after deletion commits. An early result,
+stale update, uncaught database failure or surviving product fails the test.
+
+Both workers are limited to the disposable MySQL database. They do not resolve wallet or
+payment services, contact RPC endpoints, move funds, migrate production data or publish.

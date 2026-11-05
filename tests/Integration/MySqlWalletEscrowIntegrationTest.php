@@ -85,6 +85,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         });
         Schema::create('products', function (Blueprint $t) {
             $t->uuid('id')->primary();
+            $t->boolean('featured')->default(false);
             $t->timestamps();
         });
         Schema::create('offers', function (Blueprint $t) {
@@ -592,6 +593,57 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return [$process, $pipes];
     }
 
+    private function startHeldProductDeleteWorker($productId, $readyFile, $goFile, $mutationHeldFile, $releaseFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_product_delete_hold_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $productId,
+            $readyFile,
+            $goFile,
+            $mutationHeldFile,
+            $releaseFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start held product-delete worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
+    private function startFeaturedRemovalWorker($productId, $readyFile, $goFile, $doneFile)
+    {
+        $worker = base_path('tests/Integration/fixtures/mysql_featured_removal_worker.php');
+        $command = implode(' ', array_map('escapeshellarg', [
+            PHP_BINARY,
+            $worker,
+            $productId,
+            $readyFile,
+            $goFile,
+            $doneFile,
+        ]));
+        $pipes = [];
+        $process = proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, base_path());
+        if (!is_resource($process)) {
+            $this->fail('Unable to start featured-removal worker.');
+        }
+        fclose($pipes[0]);
+
+        return [$process, $pipes];
+    }
+
     public function testConcurrentPersistedOfferRequestsCreateOneActiveTier()
     {
         $productId = '13131313-1313-4131-8131-131313131313';
@@ -1020,6 +1072,91 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             @unlink($removalGo);
             @unlink($mutationHeld);
             @unlink($releaseRemoval);
+        }
+    }
+
+    public function testFeaturedRemovalWaitsForConcurrentDeleteAndFailsClosed()
+    {
+        $productId = '31313131-3131-4131-8131-313131313131';
+        DB::table('products')->insert(['id' => $productId, 'featured' => true]);
+
+        $token = sys_get_temp_dir() . '/eckmar-featured-delete-race-' . str_replace('.', '', uniqid('', true));
+        $deleteReady = $token . '-delete.ready';
+        $deleteGo = $token . '-delete.go';
+        $deleteHeld = $token . '-delete-held';
+        $deleteRelease = $token . '-delete-release';
+        $removalReady = $token . '-removal.ready';
+        $removalGo = $token . '-removal.go';
+        $removalDone = $token . '-removal.done';
+        $workers = [];
+
+        try {
+            $workers[] = $this->startHeldProductDeleteWorker(
+                $productId,
+                $deleteReady,
+                $deleteGo,
+                $deleteHeld,
+                $deleteRelease
+            );
+
+            $deadline = microtime(true) + 10;
+            while (!is_file($deleteReady) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($deleteReady);
+            $this->assertTrue(touch($deleteGo));
+
+            $deadline = microtime(true) + 10;
+            while (!is_file($deleteHeld) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($deleteHeld);
+
+            $workers[] = $this->startFeaturedRemovalWorker(
+                $productId,
+                $removalReady,
+                $removalGo,
+                $removalDone
+            );
+            $deadline = microtime(true) + 10;
+            while (!is_file($removalReady) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($removalReady);
+            $this->assertTrue(touch($removalGo));
+            usleep(100000);
+            $this->assertFileNotExists(
+                $removalDone,
+                'Featured removal must wait while deletion owns the product row lock.'
+            );
+
+            $this->assertTrue(touch($deleteRelease));
+            $deleted = $this->collectOfferWorker($workers[0]);
+            $removal = $this->collectOfferWorker($workers[1]);
+            $workers = [];
+
+            $this->assertSame('deleted', $deleted['status']);
+            $this->assertSame('missing', $removal['status']);
+            $this->assertFileExists($removalDone);
+            $this->assertSame(0, DB::table('products')->where('id', $productId)->count());
+        } finally {
+            foreach ($workers as $worker) {
+                if (is_resource($worker[0])) {
+                    proc_terminate($worker[0]);
+                }
+                foreach ($worker[1] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            @unlink($deleteReady);
+            @unlink($deleteGo);
+            @unlink($deleteHeld);
+            @unlink($deleteRelease);
+            @unlink($removalReady);
+            @unlink($removalGo);
+            @unlink($removalDone);
         }
     }
 
