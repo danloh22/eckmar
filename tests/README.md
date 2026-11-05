@@ -161,3 +161,10 @@ APT with no package candidates. The helper therefore treats index warnings as er
 with `APT::Update::Error-Mode=any` and retries update plus install together. Its tests
 now separately model update failure and install failure; 53 combined local contracts
 pass after the refinement. The failed CI runs did not reach Composer or PHPUnit.
+
+
+PHP run 41953646803 reached the complete suite and reported 255 tests, 1,063 assertions
+and two errors in the new event-continuation tests. Both errors arose while legacy
+Mockery generated the `ExceptionHandler` interface mock. The tests now use an explicit
+recording handler double and assert the same exception object is reported. This is a
+test-runtime compatibility correction; checkout production behavior is unchanged.

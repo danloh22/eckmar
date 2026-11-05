@@ -95,8 +95,7 @@ class CheckoutTransactionRetryTest extends TestCase
         ]);
 
         $dispatchFailure = new \RuntimeException('first purchase event failed');
-        $reporter = Mockery::mock(ExceptionHandler::class);
-        $reporter->shouldReceive('report')->once()->with($dispatchFailure);
+        $reporter = new CheckoutExceptionReporterDouble();
         app()->instance(ExceptionHandler::class, $reporter);
 
         $attempted = [];
@@ -126,6 +125,7 @@ class CheckoutTransactionRetryTest extends TestCase
 
         $this->assertSame(['event-first-purchase-id', 'event-second-purchase-id'], $reserved);
         $this->assertSame(['event-first-purchase-id', 'event-second-purchase-id'], $attempted);
+        $this->assertSame([$dispatchFailure], $reporter->reported);
         $this->assertFalse($first->exists);
         $this->assertFalse($second->exists);
         $this->assertSame('first message', $first->message);
@@ -159,8 +159,7 @@ class CheckoutTransactionRetryTest extends TestCase
         }
 
         $dispatchFailure = new \RuntimeException('recovery event failed');
-        $reporter = Mockery::mock(ExceptionHandler::class);
-        $reporter->shouldReceive('report')->once()->with($dispatchFailure);
+        $reporter = new CheckoutExceptionReporterDouble();
         app()->instance(ExceptionHandler::class, $reporter);
 
         $attempted = [];
@@ -180,6 +179,7 @@ class CheckoutTransactionRetryTest extends TestCase
         $request->persist($ledger);
 
         $this->assertSame(['recovered-first-id', 'recovered-second-id'], $attempted);
+        $this->assertSame([$dispatchFailure], $reporter->reported);
     }
 
     public function testEmptyCartRejectsCheckoutBeforeOpeningTransaction()
@@ -1021,6 +1021,30 @@ class CheckoutTransactionRetryTest extends TestCase
             [false, 'original buyer message', []],
         ], CheckoutPurchaseDouble::$startingStates);
         Event::assertNotDispatched(NewPurchase::class);
+    }
+}
+
+class CheckoutExceptionReporterDouble implements ExceptionHandler
+{
+    public $reported = [];
+
+    public function report(\Exception $exception)
+    {
+        $this->reported[] = $exception;
+    }
+
+    public function shouldReport(\Exception $exception)
+    {
+        return true;
+    }
+
+    public function render($request, \Exception $exception)
+    {
+        throw $exception;
+    }
+
+    public function renderForConsole($output, \Exception $exception)
+    {
     }
 }
 
