@@ -137,3 +137,20 @@ request key, simultaneous-first-submit proof, or transactional outbox.
 Locked checkout selection coverage now rejects a product-unsupported coin, a product-unsupported or disabled purchase type, and an offer tier whose minimum exceeds the requested quantity. The source contract fixes this check before Payment construction, while cart creation applies the same product-type registry before creating a Purchase. These tests do not contact a wallet or RPC service.
 
 Checkout post-commit event coverage now exercises two-purchase normal and recovery paths. If the first `NewPurchase` dispatch throws, the exact exception is reported and the second purchase is still attempted after the cart has been cleared. The recovery path opens no transaction and makes no reservation. This verifies best-effort continuation only; it does not make event delivery durable or exactly once.
+
+
+## Bounded system-package installer retry — 5 November 2026
+
+The two disposable PHP workflows now share `scripts/install-system-packages.sh`.
+It keeps `Acquire::Retries=3` for individual downloads and retries the complete
+`apt-get install` command at most three times, preserving already downloaded archives.
+Exhaustion exits nonzero before extension setup and all downstream tests. Composer,
+PHPUnit and application/database operations are never retried by this helper.
+
+`tests/test_system_package_installer.py` uses fake `apt-get` and `sleep` commands
+to cover immediate success, two transient failures followed by success, permanent
+failure at the exact cap, unchanged package arguments/noninteractive environment, and
+invalid configuration. Combined local verification ran 52 Python contract tests
+successfully, plus clean shell syntax, YAML parsing and diff checks. These are bootstrap
+contracts, not PHP application results; the current GitHub PHP suite remains unverified
+until a new workflow reaches PHPUnit.
