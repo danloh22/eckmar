@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Requests\Admin\RemoveProductFromFeaturedReuqest;
 use App\Product;
 use App\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -54,11 +56,23 @@ class AdminFeaturedProductsAuthorizationTest extends TestCase
     {
         $this->signInStaff(false, ['categories']);
         // No products table exists: FormRequest authorization must fail before exists validation.
-        $response = $this->post(route('admin.featuredproducts.remove'), [
-            'product_id' => 'missing-product',
-        ]);
+        $request = RemoveProductFromFeaturedReuqest::create(
+            route('admin.featuredproducts.remove'),
+            'POST',
+            ['product_id' => 'missing-product']
+        );
+        $request->setContainer($this->app);
+        $request->setRedirector($this->app->make('redirect'));
+        $request->setUserResolver(function () {
+            return auth()->user();
+        });
 
-        $response->assertStatus(403);
+        try {
+            $request->validateResolved();
+            $this->fail('A category moderator must be rejected before product validation.');
+        } catch (AuthorizationException $exception) {
+            $this->assertFalse($exception->getMessage() === '');
+        }
     }
 
     /** @dataProvider authorizedStaff */
