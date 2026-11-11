@@ -423,6 +423,39 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    /**
+     * @dataProvider invalidCheckoutCartEntryValues
+     */
+    public function testNonPurchaseCartEntryIsRejectedBeforeCloningOrRequestKeyBinding($invalidEntry)
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout cart is invalid. Please rebuild your cart.'
+        );
+
+        session()->put(Cart::SESSION_NAME, ['product-id' => $invalidEntry]);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+        $request = new CheckoutRecoveryProbeRequestDouble();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('A non-purchase cart entry must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout cart is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertNull(session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME));
+        $this->assertSame($invalidEntry, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     public function testInvalidCartDoesNotResolveLedgerService()
     {
         Event::fake([NewPurchase::class]);
@@ -536,6 +569,17 @@ class CheckoutTransactionRetryTest extends TestCase
             'boolean' => [false],
             'array' => [['buyer message']],
             'object' => [(object) ['message' => 'buyer message']],
+        ];
+    }
+
+    public function invalidCheckoutCartEntryValues()
+    {
+        return [
+            'null' => [null],
+            'integer' => [42],
+            'string' => ['purchase-id'],
+            'array' => [['id' => 'purchase-id']],
+            'generic object' => [(object) ['id' => 'purchase-id']],
         ];
     }
 

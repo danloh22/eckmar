@@ -195,6 +195,31 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             persist_source.index(transaction),
         )
 
+    def test_checkout_rejects_non_purchase_session_entries_before_cloning(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("public function persist(")
+        persist_source = source[start:]
+
+        type_guard = "if (!$item instanceof Purchase)"
+        clone = "$purchase = clone $item;"
+        request_key = "$this->bindCheckoutRequestKey($items, $buyerId);"
+
+        for contract in (type_guard, clone, request_key, "Checkout cart is invalid"):
+            self.assertIn(contract, persist_source)
+        self.assertLess(persist_source.index(type_guard), persist_source.index(clone))
+        self.assertLess(persist_source.index(type_guard), persist_source.index(request_key))
+
+        checkout_tests = (
+            self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "testNonPurchaseCartEntryIsRejectedBeforeCloningOrRequestKeyBinding",
+            checkout_tests,
+        )
+        self.assertIn("invalidCheckoutCartEntryValues", checkout_tests)
+
     def test_checkout_validates_stable_unique_identities_before_transaction(self):
         source = (
             self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"

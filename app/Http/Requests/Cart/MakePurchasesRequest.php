@@ -46,6 +46,13 @@ class MakePurchasesRequest extends FormRequest
             if (empty($items)) {
                 throw new RequestException('Add at least one product before opening checkout.');
             }
+            foreach ($items as $item) {
+                if (!$item instanceof Purchase) {
+                    throw new RequestException(
+                        'Checkout cart is invalid. Please rebuild your cart.'
+                    );
+                }
+            }
             ksort($items);
             // Keep session models untouched on rollback and later manual retries.
             // Clone preserves the cart purchase ID; fresh relations prevent shared
