@@ -550,6 +550,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             $offerId,
             $readyFile,
             $goFile,
+            $attemptFile,
             $doneFile,
         ]));
         $pipes = [];
@@ -619,7 +620,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         return [$process, $pipes];
     }
 
-    private function startFeaturedRemovalWorker($productId, $readyFile, $goFile, $doneFile)
+    private function startFeaturedRemovalWorker($productId, $readyFile, $goFile, $attemptFile, $doneFile)
     {
         $worker = base_path('tests/Integration/fixtures/mysql_featured_removal_worker.php');
         $command = implode(' ', array_map('escapeshellarg', [
@@ -1087,6 +1088,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
         $deleteRelease = $token . '-delete-release';
         $removalReady = $token . '-removal.ready';
         $removalGo = $token . '-removal.go';
+        $removalAttempt = $token . '-removal.attempt';
         $removalDone = $token . '-removal.done';
         $workers = [];
 
@@ -1116,6 +1118,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
                 $productId,
                 $removalReady,
                 $removalGo,
+                $removalAttempt,
                 $removalDone
             );
             $deadline = microtime(true) + 10;
@@ -1124,6 +1127,11 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             }
             $this->assertFileExists($removalReady);
             $this->assertTrue(touch($removalGo));
+            $deadline = microtime(true) + 10;
+            while (!is_file($removalAttempt) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            $this->assertFileExists($removalAttempt);
             usleep(100000);
             $this->assertFileNotExists(
                 $removalDone,
@@ -1156,6 +1164,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             @unlink($deleteRelease);
             @unlink($removalReady);
             @unlink($removalGo);
+            @unlink($removalAttempt);
             @unlink($removalDone);
         }
     }
