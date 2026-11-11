@@ -583,6 +583,50 @@ class CheckoutTransactionRetryTest extends TestCase
         ];
     }
 
+    public function invalidCheckoutCartContainerValues()
+    {
+        return [
+            'integer' => [42],
+            'boolean' => [true],
+            'string' => ['purchase-id'],
+            'generic object' => [(object) ['product-id' => 'purchase-id']],
+        ];
+    }
+
+    /**
+     * @dataProvider invalidCheckoutCartContainerValues
+     */
+    public function testNonArrayCartContainerIsRejectedBeforeIterationOrRequestKeyBinding(
+        $invalidCart
+    ) {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout cart is invalid. Please rebuild your cart.'
+        );
+
+        session()->put(Cart::SESSION_NAME, $invalidCart);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+        $request = new CheckoutRecoveryProbeRequestDouble();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('A non-array cart container must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout cart is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertNull(session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME));
+        $this->assertSame($invalidCart, session()->get(Cart::SESSION_NAME));
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
     /**
      * @dataProvider invalidCheckoutRecoveryIdentityValues
      */

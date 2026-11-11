@@ -220,6 +220,42 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         )
         self.assertIn("invalidCheckoutCartEntryValues", checkout_tests)
 
+    def test_checkout_rejects_non_array_cart_container_before_iteration(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        start = source.index("public function persist(")
+        persist_source = source[start:]
+
+        cart_read = "$items = Cart::getCart()->items();"
+        container_guard = "if (!is_array($items))"
+        empty_guard = "if (empty($items))"
+        entry_iteration = "foreach ($items as $item)"
+        request_key = "$this->bindCheckoutRequestKey($items, $buyerId);"
+
+        for contract in (
+            cart_read,
+            container_guard,
+            empty_guard,
+            entry_iteration,
+            request_key,
+            "Checkout cart is invalid",
+        ):
+            self.assertIn(contract, persist_source)
+        self.assertLess(persist_source.index(cart_read), persist_source.index(container_guard))
+        self.assertLess(persist_source.index(container_guard), persist_source.index(empty_guard))
+        self.assertLess(persist_source.index(container_guard), persist_source.index(entry_iteration))
+        self.assertLess(persist_source.index(container_guard), persist_source.index(request_key))
+
+        checkout_tests = (
+            self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "testNonArrayCartContainerIsRejectedBeforeIterationOrRequestKeyBinding",
+            checkout_tests,
+        )
+        self.assertIn("invalidCheckoutCartContainerValues", checkout_tests)
+
     def test_checkout_validates_stable_unique_identities_before_transaction(self):
         source = (
             self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"

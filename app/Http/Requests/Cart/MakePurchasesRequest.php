@@ -43,6 +43,11 @@ class MakePurchasesRequest extends FormRequest
         $transactionCompleted = false;
         try{
             $items = Cart::getCart()->items();
+            if (!is_array($items)) {
+                throw new RequestException(
+                    'Checkout cart is invalid. Please rebuild your cart.'
+                );
+            }
             if (empty($items)) {
                 throw new RequestException('Add at least one product before opening checkout.');
             }

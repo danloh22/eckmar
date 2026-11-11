@@ -191,3 +191,7 @@ payment services, contact RPC endpoints, move funds, migrate production data or 
 ## Canonical checkout cart-entry preflight — 11 November 2026
 
 `CheckoutTransactionRetryTest` now rejects null, scalar, array and generic-object session entries before checkout attempts to clone them. The request key remains unbound, committed-row recovery is not queried, no ledger or transaction work starts, no purchase event is emitted, and the corrupt cart remains available for explicit rebuild. Valid `Purchase` instances and subclasses remain compatible. This is defensive session validation rather than durable database idempotency or a transactional outbox.
+
+## Canonical checkout cart-container preflight — 11 November 2026
+
+`CheckoutTransactionRetryTest` now rejects scalar and object session cart containers before checkout tests emptiness or enters `foreach`. The request key remains unbound, recovery is not queried, no ledger or transaction work starts, and the original corrupt session value is preserved for explicit cleanup. Array carts retain their existing empty-cart and per-entry behavior. This is defensive session validation rather than durable database idempotency or a transactional outbox.
