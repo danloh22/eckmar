@@ -10,7 +10,7 @@ require $root . '/vendor/autoload.php';
 $app = require $root . '/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
-if (getenv('ECKMAR_DISPOSABLE_MYSQL') !== 'yes' || count($argv) !== 5) {
+if (getenv('ECKMAR_DISPOSABLE_MYSQL') !== 'yes' || count($argv) !== 6) {
     fwrite(STDERR, "Disposable MySQL featured-removal worker invoked without its test contract.\n");
     exit(2);
 }
@@ -28,7 +28,8 @@ DB::purge('mysql');
 $productId = $argv[1];
 $readyFile = $argv[2];
 $goFile = $argv[3];
-$doneFile = $argv[4];
+$attemptFile = $argv[4];
+$doneFile = $argv[5];
 
 if (!touch($readyFile)) {
     fwrite(STDERR, "Unable to signal worker readiness.\n");
@@ -44,6 +45,11 @@ while (!is_file($goFile)) {
     usleep(10000);
 }
 
+if (!touch($attemptFile)) {
+    fwrite(STDERR, "Unable to signal featured-removal attempt.\n");
+    exit(5);
+}
+
 $request = RemoveProductFromFeaturedReuqest::create('/admin/featuredproducts/remove', 'POST', [
     'product_id' => $productId,
 ]);
@@ -57,7 +63,7 @@ try {
 
 if (!touch($doneFile)) {
     fwrite(STDERR, "Unable to signal worker completion.\n");
-    exit(5);
+    exit(6);
 }
 
 echo json_encode(['status' => $status]);
