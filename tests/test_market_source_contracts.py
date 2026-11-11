@@ -235,6 +235,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("$item->getAttribute($attribute)", guard)
         self.assertIn("$item->getAttribute('shipping_id')", guard)
         self.assertIn("$shippingId !== null", guard)
+        self.assertIn("$message !== null && !is_string($message)", guard)
         self.assertIn("$buyerId = $this->currentCheckoutBuyerId();", guard)
         self.assertIn("$item->getAttribute('buyer_id') !== $buyerId", guard)
         self.assertGreater(
@@ -249,6 +250,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("testDuplicatePurchaseIdsAreRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("testMissingOrNonStringPurchaseIdIsRejectedBeforeOpeningTransaction", checkout_tests)
         self.assertIn("testInvalidPurchaseQuantityIsRejectedBeforeOpeningTransaction", checkout_tests)
+        self.assertIn("testNonStringPurchaseMessageIsRejectedBeforeRequestKeyBinding", checkout_tests)
         self.assertIn(
             "testInvalidRecoveryIdentityIsRejectedBeforeLookupOrLedgerResolution",
             checkout_tests,

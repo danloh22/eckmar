@@ -180,6 +180,16 @@ class MakePurchasesRequest extends FormRequest
                     'Checkout recovery identity is invalid. Please rebuild your cart.'
                 );
             }
+            // NewItemRequest and Cart::addToCart only create string messages.
+            // Reject corrupted session values before hashing a request identity:
+            // JSON can otherwise encode arrays/objects into a stable-looking key
+            // that the purchase encryption path was never designed to process.
+            $message = $item->getAttribute('message');
+            if ($message !== null && !is_string($message)) {
+                throw new RequestException(
+                    'Checkout recovery identity is invalid. Please rebuild your cart.'
+                );
+            }
             $shippingId = $item->getAttribute('shipping_id');
             if ($shippingId !== null
                 && (!is_string($shippingId) || $shippingId === '' || trim($shippingId) !== $shippingId)
