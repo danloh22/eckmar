@@ -504,6 +504,46 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             checkout_tests,
         )
 
+    def test_checkout_request_key_is_buyer_bound_and_rotated_by_cart_mutations(self):
+        request = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        cart = (self.root / "app/Marketplace/Cart.php").read_text(encoding="utf-8")
+        persist = request[
+            request.index("public function persist("):
+            request.index("protected function clearCheckoutCart(")
+        ]
+        binding = request[
+            request.index("protected function bindCheckoutRequestKey("):
+            request.index("protected function currentCheckoutBuyerId(")
+        ]
+
+        self.assertIn("$buyerId = $this->assertStableCheckoutIdentities($items);", persist)
+        self.assertIn("$this->bindCheckoutRequestKey($items, $buyerId);", persist)
+        self.assertLess(
+            persist.index("bindCheckoutRequestKey"),
+            persist.index("recoverCommittedCheckout"),
+        )
+        self.assertIn("'buyer_id' => $buyerId", binding)
+        self.assertIn("'version' => 1", binding)
+        self.assertIn("hash('sha256', $encoded)", binding)
+        self.assertIn("hash_equals($storedKey, $requestKey)", binding)
+        self.assertIn("Checkout request identity changed.", binding)
+        self.assertEqual(
+            4,
+            cart.count("CHECKOUT_REQUEST_KEY_SESSION_NAME"),
+        )
+        self.assertIn("session() -> forget([", cart)
+
+        checkout_tests = (
+            self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn("testCheckoutRequestKeyIsStableAndBuyerBound", checkout_tests)
+        self.assertIn(
+            "testChangedCheckoutRequestKeyFailsBeforeRecoveryOrLedgerWork",
+            checkout_tests,
+        )
+
     def test_wallet_race_recovery_rejects_unrelated_database_errors(self):
         source = (
             self.root / "app/Services/WalletLedgerService.php"

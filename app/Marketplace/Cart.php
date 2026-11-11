@@ -19,6 +19,7 @@ use App\Vendor;
 class Cart
 {
     const SESSION_NAME = 'cart_items';
+    const CHECKOUT_REQUEST_KEY_SESSION_NAME = 'checkout_request_key';
 
     /**
      * Static instance of the cart
@@ -115,6 +116,9 @@ class Cart
         $itemsTable[$product -> id] = $newCartItem;
         // save to table
         session() -> put(self::SESSION_NAME, $itemsTable);
+        // A request key represents one exact cart snapshot. Any successful
+        // mutation must force checkout to bind a fresh snapshot.
+        session() -> forget(self::CHECKOUT_REQUEST_KEY_SESSION_NAME);
 
     }
 
@@ -142,6 +146,7 @@ class Cart
         unset($cartItems[$product -> id]);
 
         session() -> put(self::SESSION_NAME, $cartItems);
+        session() -> forget(self::CHECKOUT_REQUEST_KEY_SESSION_NAME);
     }
 
     /**
@@ -178,7 +183,10 @@ class Cart
      */
     public function clearCart()
     {
-        session() -> forget(self::SESSION_NAME);
+        session() -> forget([
+            self::SESSION_NAME,
+            self::CHECKOUT_REQUEST_KEY_SESSION_NAME,
+        ]);
     }
 
 }

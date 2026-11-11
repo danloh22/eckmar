@@ -55,7 +55,8 @@ class MakePurchasesRequest extends FormRequest
                 $purchase->setRelations([]);
                 return $purchase;
             }, $items);
-            $this->assertStableCheckoutIdentities($items);
+            $buyerId = $this->assertStableCheckoutIdentities($items);
+            $this->bindCheckoutRequestKey($items, $buyerId);
             // A sequential retry may arrive after the first request committed but
             // before its session cart was cleared. Recover that complete result
             // before payment, inventory or ledger work can be repeated.
@@ -203,6 +204,74 @@ class MakePurchasesRequest extends FormRequest
                 );
             }
         }
+
+        return $buyerId;
+    }
+
+    /**
+     * Bind every retry in this session to one authenticated buyer and one
+     * canonical cart snapshot. This is deliberately a fail-closed request
+     * contract, not a claim of durable database idempotency: a future schema
+     * change can persist the same digest beside its checkout result.
+     *
+     * @param array $items
+     * @param string $buyerId
+     * @throws RequestException
+     */
+    protected function bindCheckoutRequestKey(array $items, $buyerId)
+    {
+        $requestKey = $this->checkoutRequestKey($items, $buyerId);
+        $storedKey = session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME);
+
+        if ($storedKey === null) {
+            session()->put(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME, $requestKey);
+            return;
+        }
+
+        if (!is_string($storedKey)
+            || preg_match('/\A[a-f0-9]{64}\z/D', $storedKey) !== 1
+            || !hash_equals($storedKey, $requestKey)
+        ) {
+            throw new RequestException(
+                'Checkout request identity changed. Please rebuild your cart.'
+            );
+        }
+    }
+
+    /**
+     * Produce a versioned digest that is stable across identical retries but
+     * changes for another buyer or any purchase-relevant cart field.
+     */
+    protected function checkoutRequestKey(array $items, $buyerId)
+    {
+        $identity = [
+            'version' => 1,
+            'buyer_id' => $buyerId,
+            'purchases' => [],
+        ];
+
+        foreach ($items as $item) {
+            $identity['purchases'][] = [
+                'id' => $item->getAttribute('id'),
+                'buyer_id' => $item->getAttribute('buyer_id'),
+                'vendor_id' => $item->getAttribute('vendor_id'),
+                'offer_id' => $item->getAttribute('offer_id'),
+                'shipping_id' => $item->getAttribute('shipping_id'),
+                'quantity' => $item->getAttribute('quantity'),
+                'coin_name' => $item->getAttribute('coin_name'),
+                'type' => $item->getAttribute('type'),
+                'message' => $item->getAttribute('message'),
+            ];
+        }
+
+        $encoded = json_encode($identity, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (!is_string($encoded)) {
+            throw new RequestException(
+                'Checkout request identity is invalid. Please rebuild your cart.'
+            );
+        }
+
+        return hash('sha256', $encoded);
     }
 
     /**

@@ -46,7 +46,72 @@ class CheckoutTransactionRetryTest extends TestCase
         $this->assertFalse($purchase->exists);
         $this->assertSame('buyer message', $purchase->message);
         $this->assertEmpty(Cart::getCart()->items());
+        $this->assertNull(session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME));
         // The dispatch mock verifies exactly one event without invoking listeners.
+    }
+
+    public function testCheckoutRequestKeyIsStableAndBuyerBound()
+    {
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'request-key-purchase-id';
+        $purchase->message = 'buyer message';
+        $request = new CheckoutRequestKeyProbeDouble();
+
+        $first = $request->requestKey([$purchase], 'buyer-id');
+        $same = $request->requestKey([clone $purchase], 'buyer-id');
+        $otherBuyer = $request->requestKey([$purchase], 'other-buyer-id');
+        $changed = clone $purchase;
+        $changed->quantity = 2;
+
+        $this->assertRegExp('/\A[a-f0-9]{64}\z/D', $first);
+        $this->assertSame($first, $same);
+        $this->assertNotSame($first, $otherBuyer);
+        $this->assertNotSame($first, $request->requestKey([$changed], 'buyer-id'));
+    }
+
+    public function testChangedCheckoutRequestKeyFailsBeforeRecoveryOrLedgerWork()
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout request identity changed. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'request-key-mismatch-id';
+        $purchase->message = 'buyer message';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+        session()->put(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME, str_repeat('a', 64));
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+        $request = new CheckoutRecoveryProbeRequestDouble();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('A mismatched checkout request key must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout request identity changed. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        $this->assertSame(str_repeat('a', 64), session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME));
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function testClearingCartAlsoClearsCheckoutRequestKey()
+    {
+        session()->put(Cart::SESSION_NAME, ['product-id' => new CheckoutPurchaseDouble()]);
+        session()->put(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME, str_repeat('b', 64));
+
+        Cart::getCart()->clearCart();
+
+        $this->assertNull(session()->get(Cart::SESSION_NAME));
+        $this->assertNull(session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME));
     }
 
     public function testSuccessfulCheckoutRunsTransactionAndReservationOnce()
@@ -1093,6 +1158,14 @@ class CheckoutAuthenticatedRequestDouble extends MakePurchasesRequest
     protected function currentCheckoutBuyerId()
     {
         return $this->checkoutBuyerId;
+    }
+}
+
+class CheckoutRequestKeyProbeDouble extends CheckoutAuthenticatedRequestDouble
+{
+    public function requestKey(array $items, $buyerId)
+    {
+        return $this->checkoutRequestKey($items, $buyerId);
     }
 }
 
