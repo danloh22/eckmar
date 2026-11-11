@@ -550,7 +550,6 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             $offerId,
             $readyFile,
             $goFile,
-            $attemptFile,
             $doneFile,
         ]));
         $pipes = [];
@@ -629,6 +628,7 @@ class MySqlWalletEscrowIntegrationTest extends TestCase
             $productId,
             $readyFile,
             $goFile,
+            $attemptFile,
             $doneFile,
         ]));
         $pipes = [];
