@@ -1023,7 +1023,7 @@ class CheckoutTransactionRetryTest extends TestCase
     public function testFailedCheckoutsDoNotReplayOrMutateTheSessionPurchase()
     {
         Event::fake([NewPurchase::class]);
-        Log::shouldReceive('error')->twice();
+        Log::shouldReceive('error')->times(3);
         CheckoutPurchaseDouble::$startingStates = [];
 
         $purchase = new CheckoutPurchaseDouble();
@@ -1057,6 +1057,7 @@ class CheckoutTransactionRetryTest extends TestCase
             }
         });
 
+        $boundRequestKey = null;
         for ($request = 0; $request < 2; $request++) {
             $failure = null;
             try {
@@ -1072,8 +1073,34 @@ class CheckoutTransactionRetryTest extends TestCase
             $this->assertSame($originalOffer, $purchase->getRelation('offer'));
             $this->assertSame('original offer', $originalOffer->title);
             $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+
+            $currentRequestKey = session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME);
+            $this->assertRegExp('/\\A[a-f0-9]{64}\\z/D', $currentRequestKey);
+            if ($boundRequestKey === null) {
+                $boundRequestKey = $currentRequestKey;
+            }
+            $this->assertSame($boundRequestKey, $currentRequestKey);
         }
 
+        // A failed first submission keeps one exact session identity. An
+        // identical retry may reuse it, but a changed snapshot must fail before
+        // recovery, ledger or transaction work even if the cart was corrupted
+        // without going through the mutation helpers that invalidate the key.
+        $purchase->quantity = 2;
+        $request = new CheckoutRecoveryProbeRequestDouble();
+        try {
+            $request->persist($ledger);
+            $this->fail('A changed failed-checkout snapshot must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout request identity changed. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertSame(2, $executions);
+        $this->assertSame($boundRequestKey, session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME));
         $this->assertCount(2, $attemptedPurchases);
         $this->assertNotSame($attemptedPurchases[0], $attemptedPurchases[1]);
         foreach ($attemptedPurchases as $attempt) {

@@ -179,3 +179,7 @@ stale update, uncaught database failure or surviving product fails the test.
 
 Both workers are limited to the disposable MySQL database. They do not resolve wallet or
 payment services, contact RPC endpoints, move funds, migrate production data or publish.
+
+## Failed-first-submission request-key lifecycle — 11 November 2026
+
+`CheckoutTransactionRetryTest` now covers two failed submissions of the same buyer/cart snapshot. The first attempt binds a canonical session request key, the identical retry reuses it, and a subsequently altered snapshot fails before recovery, ledger work or another transaction while preserving the bound key. This is session-lifecycle coverage only: it does not coordinate separate sessions, provide durable database idempotency or turn best-effort purchase events into an outbox. No wallet/RPC service or real funds are used.
