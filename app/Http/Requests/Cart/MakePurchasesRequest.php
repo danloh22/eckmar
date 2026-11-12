@@ -166,7 +166,12 @@ class MakePurchasesRequest extends FormRequest
         $seen = [];
         foreach ($items as $item) {
             $id = $item->getAttribute('id');
-            if (!is_string($id) || $id === '' || trim($id) !== $id || isset($seen[$id])) {
+            if (!is_string($id)
+                || $id === ''
+                || trim($id) !== $id
+                || preg_match('//u', $id) !== 1
+                || isset($seen[$id])
+            ) {
                 throw new RequestException(
                     'Checkout identity is missing or duplicated. Please rebuild your cart.'
                 );
@@ -179,7 +184,11 @@ class MakePurchasesRequest extends FormRequest
             }
             foreach (['buyer_id', 'vendor_id', 'offer_id', 'coin_name', 'type'] as $attribute) {
                 $value = $item->getAttribute($attribute);
-                if (!is_string($value) || $value === '' || trim($value) !== $value) {
+                if (!is_string($value)
+                    || $value === ''
+                    || trim($value) !== $value
+                    || preg_match('//u', $value) !== 1
+                ) {
                     throw new RequestException(
                         'Checkout recovery identity is invalid. Please rebuild your cart.'
                     );
@@ -206,7 +215,11 @@ class MakePurchasesRequest extends FormRequest
             }
             $shippingId = $item->getAttribute('shipping_id');
             if ($shippingId !== null
-                && (!is_string($shippingId) || $shippingId === '' || trim($shippingId) !== $shippingId)
+                && (!is_string($shippingId)
+                    || $shippingId === ''
+                    || trim($shippingId) !== $shippingId
+                    || preg_match('//u', $shippingId) !== 1
+                )
             ) {
                 throw new RequestException(
                     'Checkout recovery identity is invalid. Please rebuild your cart.'
@@ -216,7 +229,11 @@ class MakePurchasesRequest extends FormRequest
         }
 
         $buyerId = $this->currentCheckoutBuyerId();
-        if (!is_string($buyerId) || $buyerId === '' || trim($buyerId) !== $buyerId) {
+        if (!is_string($buyerId)
+            || $buyerId === ''
+            || trim($buyerId) !== $buyerId
+            || preg_match('//u', $buyerId) !== 1
+        ) {
             throw new RequestException(
                 'Checkout recovery identity is invalid. Please rebuild your cart.'
             );
@@ -467,7 +484,10 @@ class MakePurchasesRequest extends FormRequest
     {
         foreach (['buyer_id', 'vendor_id', 'offer_id', 'coin_name', 'type'] as $attribute) {
             $value = $committed->getAttribute($attribute);
-            if (!is_string($value) || $value === '' || trim($value) !== $value
+            if (!is_string($value)
+                || $value === ''
+                || trim($value) !== $value
+                || preg_match('//u', $value) !== 1
                 || $requested->getAttribute($attribute) !== $value
             ) {
                 return false;
@@ -476,7 +496,11 @@ class MakePurchasesRequest extends FormRequest
 
         $shippingId = $committed->getAttribute('shipping_id');
         if ($shippingId !== null
-            && (!is_string($shippingId) || $shippingId === '' || trim($shippingId) !== $shippingId)
+            && (!is_string($shippingId)
+                || $shippingId === ''
+                || trim($shippingId) !== $shippingId
+                || preg_match('//u', $shippingId) !== 1
+            )
         ) {
             return false;
         }

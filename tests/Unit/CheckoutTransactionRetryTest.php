@@ -639,6 +639,7 @@ class CheckoutTransactionRetryTest extends TestCase
             'whitespace' => [' purchase-id '],
             'integer' => [42],
             'array' => [['purchase-id']],
+            'invalid UTF-8' => ["\xFF"],
         ];
     }
 
@@ -779,6 +780,8 @@ class CheckoutTransactionRetryTest extends TestCase
             'empty shipping' => ['shipping_id', ''],
             'whitespace shipping' => ['shipping_id', ' shipping-id '],
             'non-string shipping' => ['shipping_id', 42],
+            'invalid UTF-8 vendor' => ['vendor_id', "\xFF"],
+            'invalid UTF-8 shipping' => ['shipping_id', "\xC3"],
         ];
     }
 
@@ -823,6 +826,7 @@ class CheckoutTransactionRetryTest extends TestCase
         return [
             'missing authenticated buyer' => [null],
             'different authenticated buyer' => ['other-buyer-id'],
+            'invalid UTF-8 authenticated buyer' => ["\xFF"],
         ];
     }
 
@@ -1109,6 +1113,8 @@ class CheckoutTransactionRetryTest extends TestCase
             'numeric persisted coin is rejected before comparison' => ['coin_name', 'btc', 42],
             'quantity suffix aliases integer under cast' => ['quantity', 2, '2oops'],
             'zero-padded quantity is non-canonical' => ['quantity', 2, '02'],
+            'invalid UTF-8 persisted vendor' => ['vendor_id', 'vendor-id', "\xFF"],
+            'invalid UTF-8 persisted shipping' => ['shipping_id', null, "\xC3"],
         ];
     }
 
