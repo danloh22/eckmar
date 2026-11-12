@@ -155,6 +155,13 @@ class VendorController extends Controller
         $this -> authorizeEditOrCreate($product);
 
         try{
+            // Route parameters normally arrive as strings, but keep the
+            // controller boundary fail-closed for direct/internal callers.
+            // filter_var() otherwise treats values such as true and 1.0 as
+            // the canonical quantity 1 and could remove the wrong tier.
+            if (!is_int($quantity) && !is_string($quantity)) {
+                throw new RequestException('The offer quantity must be a canonical positive integer.');
+            }
             $validatedQuantity = filter_var($quantity, FILTER_VALIDATE_INT, [
                 'options' => ['min_range' => 1, 'max_range' => 2147483647],
             ]);

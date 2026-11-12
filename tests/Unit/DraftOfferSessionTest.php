@@ -58,7 +58,18 @@ class DraftOfferSessionTest extends TestCase
 
     public function invalidRemovalQuantities()
     {
-        return [['1abc'], ['01'], ['0'], ['-1'], ['2147483648']];
+        return [
+            'numeric suffix' => ['1abc'],
+            'leading zero' => ['01'],
+            'zero' => ['0'],
+            'negative' => ['-1'],
+            'overflow' => ['2147483648'],
+            'boolean' => [true],
+            'float' => [1.0],
+            'array' => [['1']],
+            'object' => [(object) ['quantity' => 1]],
+            'null' => [null],
+        ];
     }
 
     /** @dataProvider duplicateKeys */
