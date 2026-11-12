@@ -641,6 +641,7 @@ class CheckoutTransactionRetryTest extends TestCase
             'array' => [['purchase-id']],
             'invalid UTF-8' => ["\xFF"],
             'embedded NUL' => ["purchase\0id"],
+            'embedded Unicode format character' => ["purchase\u{200D}id"],
             'longer than UUID column' => [str_repeat('p', 37)],
         ];
     }
@@ -786,6 +787,8 @@ class CheckoutTransactionRetryTest extends TestCase
             'invalid UTF-8 shipping' => ['shipping_id', "\xC3"],
             'embedded NUL vendor' => ['vendor_id', "vendor\0id"],
             'embedded control shipping' => ['shipping_id', "shipping\x1Fid"],
+            'embedded Unicode format vendor' => ['vendor_id', "vendor\u{200D}id"],
+            'embedded Unicode format shipping' => ['shipping_id', "shipping\u{200D}id"],
             'vendor longer than UUID column' => ['vendor_id', str_repeat('v', 37)],
             'shipping longer than UUID column' => ['shipping_id', str_repeat('s', 37)],
         ];
@@ -834,6 +837,7 @@ class CheckoutTransactionRetryTest extends TestCase
             'different authenticated buyer' => ['other-buyer-id'],
             'invalid UTF-8 authenticated buyer' => ["\xFF"],
             'embedded NUL authenticated buyer' => ["buyer\0id"],
+            'embedded Unicode format authenticated buyer' => ["buyer\u{200D}id"],
             'authenticated buyer longer than UUID column' => [str_repeat('b', 37)],
         ];
     }
@@ -1125,6 +1129,8 @@ class CheckoutTransactionRetryTest extends TestCase
             'invalid UTF-8 persisted shipping' => ['shipping_id', null, "\xC3"],
             'embedded NUL persisted vendor' => ['vendor_id', 'vendor-id', "vendor\0id"],
             'embedded control persisted shipping' => ['shipping_id', null, "shipping\x1Fid"],
+            'embedded Unicode format persisted vendor' => ['vendor_id', 'vendor-id', "vendor\u{200D}id"],
+            'embedded Unicode format persisted shipping' => ['shipping_id', null, "shipping\u{200D}id"],
             'persisted vendor longer than UUID column' => ['vendor_id', 'vendor-id', str_repeat('v', 37)],
             'persisted shipping longer than UUID column' => ['shipping_id', null, str_repeat('s', 37)],
         ];
