@@ -7,6 +7,7 @@ use App\Marketplace\Utility\CurrencyConverter;
 use App\Offer;
 use App\Product;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
 
 class NewOfferRequest extends FormRequest
 {
@@ -55,16 +56,25 @@ class NewOfferRequest extends FormRequest
         // offers for editing product
         if ($editingProduct && $editingProduct->exists) {
             $minQuantity = $this->min_quantity;
-            if ($editingProduct->offers()->where('min_quantity', $minQuantity)->exists()) {
-                throw new RequestException('There is already offer like that! Please remove old offer to add new one.');
-            }
+            $price = $this->validatedUsdPrice();
 
-            $newOffer = new Offer();
-            $newOffer -> min_quantity = $minQuantity;
-            $newOffer -> price = $this->validatedUsdPrice();
-            $newOffer -> product_id = $editingProduct -> id;
-            $newOffer -> save();
+            DB::transaction(function () use ($editingProduct, $minQuantity, $price) {
+                // Serialize offer edits per product. The request-level exists
+                // check alone allows concurrent inserts for the same tier.
+                $lockedProduct = Product::whereKey($editingProduct->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
+                if ($lockedProduct->offers()->where('min_quantity', $minQuantity)->exists()) {
+                    throw new RequestException('There is already offer like that! Please remove old offer to add new one.');
+                }
+
+                $newOffer = new Offer();
+                $newOffer -> min_quantity = $minQuantity;
+                $newOffer -> price = $price;
+                $newOffer -> product_id = $lockedProduct -> id;
+                $newOffer -> save();
+            });
         }
         // offer for new product
         else{

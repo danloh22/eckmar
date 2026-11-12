@@ -29,6 +29,14 @@ class SendMessageNotifications
         $content = 'You have received new message from ['.$event->message->getSender()->username.']';
         $routeName = 'profile.messages';
         $routeParams = serialize(['conversation'=>$event->message->conversation()->first()->id]);
-        $event->message->getReceiver()->notify($content,$routeName,$routeParams);
+        // Each persisted message has a stable UUID. Use it as the delivery
+        // identity so an event replay is idempotent without collapsing later
+        // messages in the same conversation.
+        $event->message->getReceiver()->notifyOnce(
+            'message-received:' . $event->message->id,
+            $content,
+            $routeName,
+            $routeParams
+        );
     }
 }

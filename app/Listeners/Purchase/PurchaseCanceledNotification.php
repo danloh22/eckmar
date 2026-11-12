@@ -30,33 +30,22 @@ class PurchaseCanceledNotification
         $content = "Your sale has been canceled.";
         $routeName = 'profile.sales.single';
         $routeParams = serialize(['sale'=>$event->purchase->id]);
-        $this->notifyOnce($event->purchase->vendor->user, $content, $routeName, $routeParams);
+        $event->purchase->vendor->user->notifyOnce(
+            'purchase-canceled-vendor:' . $event->purchase->id,
+            $content,
+            $routeName,
+            $routeParams
+        );
 
         // Notifiy buyer
         $content = "Your purchase has been canceled.";
         $routeName = 'profile.purchases.single';
         $routeParams = serialize(['purchase'=>$event->purchase->id]);
-        $this->notifyOnce($event->purchase->buyer, $content, $routeName, $routeParams);
-    }
-
-    /**
-     * Suppress a sequential replay after the notification was persisted.
-     *
-     * The description is part of the identity because several purchase
-     * lifecycle notifications intentionally share the same destination.
-     */
-    private function notifyOnce($user, $content, $routeName, $routeParams)
-    {
-        $alreadyDelivered = $user->notifications()
-            ->where('description', $content)
-            ->where('route_name', $routeName)
-            ->where('route_params', $routeParams)
-            ->exists();
-
-        if ($alreadyDelivered) {
-            return;
-        }
-
-        $user->notify($content, $routeName, $routeParams);
+        $event->purchase->buyer->notifyOnce(
+            'purchase-canceled-buyer:' . $event->purchase->id,
+            $content,
+            $routeName,
+            $routeParams
+        );
     }
 }

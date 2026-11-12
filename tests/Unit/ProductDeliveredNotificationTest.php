@@ -20,6 +20,7 @@ class ProductDeliveredNotificationTest extends TestCase
 
         $this->assertSame(1, $vendorUser->notificationsSent);
         $this->assertSame([
+            'purchase-delivered:' . $purchase->id,
             'Your product has been marked delivered by buyer [buyer]',
             'profile.sales.single',
             serialize(['sales' => $purchase->id]),
@@ -44,7 +45,7 @@ class ProductDeliveredNotificationTest extends TestCase
         $listener->handle($event);
 
         $this->assertSame(1, $vendorUser->notificationsSent);
-        $this->assertTrue($vendorUser->notificationQuery->delivered);
+        $this->assertArrayHasKey('purchase-delivered:' . $purchase->id, $vendorUser->deliveredKeys);
     }
 
     private function purchaseWithNotificationVendor(&$vendorUser)
@@ -67,45 +68,28 @@ class ProductDeliveredNotificationUserDouble
 {
     public $failAfterPersisting = false;
     public $lastNotification = [];
-    public $notificationQuery;
     public $notificationsSent = 0;
+    public $deliveredKeys = [];
 
     public function __construct()
     {
-        $this->notificationQuery = new ProductDeliveredNotificationQueryDouble();
+        // no-op
     }
 
-    public function notifications()
+    public function notifyOnce($deliveryKey, $content, $routeName, $routeParams)
     {
-        return $this->notificationQuery;
-    }
+        if (isset($this->deliveredKeys[$deliveryKey])) {
+            return false;
+        }
 
-    public function notify($content, $routeName, $routeParams)
-    {
+        $this->deliveredKeys[$deliveryKey] = true;
         $this->notificationsSent++;
-        $this->lastNotification = [$content, $routeName, $routeParams];
-        $this->notificationQuery->delivered = true;
+        $this->lastNotification = [$deliveryKey, $content, $routeName, $routeParams];
 
         if ($this->failAfterPersisting) {
             throw new \RuntimeException('post-persistence side effect failed');
         }
-    }
-}
 
-class ProductDeliveredNotificationQueryDouble
-{
-    public $delivered = false;
-    public $filters = [];
-
-    public function where($column, $value)
-    {
-        $this->filters[] = [$column, $value];
-
-        return $this;
-    }
-
-    public function exists()
-    {
-        return $this->delivered;
+        return true;
     }
 }

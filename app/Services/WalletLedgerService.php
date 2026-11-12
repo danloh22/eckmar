@@ -10,12 +10,47 @@ use App\WalletEscrowHold;
 use App\WalletLedgerEntry;
 use App\MarketFeeWallet;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 
 class WalletLedgerService
 {
     public function walletFor($userId, string $coin): Wallet
     {
-        return Wallet::firstOrCreate(['user_id' => $userId, 'coin' => $coin], ['status' => 'active']);
+        $identity = ['user_id' => $userId, 'coin' => $coin];
+
+        try {
+            return Wallet::firstOrCreate($identity, ['status' => 'active']);
+        } catch (QueryException $exception) {
+            if (!$this->isUniqueConstraintViolation($exception)) {
+                throw $exception;
+            }
+
+            // firstOrCreate performs a read followed by an insert. Two first
+            // requests for the same user/coin can therefore race at the unique
+            // constraint. A locking read observes the winning committed row;
+            // unrelated persistence errors still propagate unchanged.
+            $wallet = Wallet::where($identity)->lockForUpdate()->first();
+            if ($wallet !== null) {
+                return $wallet;
+            }
+
+            throw $exception;
+        }
+    }
+
+    private function isUniqueConstraintViolation(QueryException $exception): bool
+    {
+        $sqlState = (string) $exception->getCode();
+        $driverCode = isset($exception->errorInfo[1])
+            ? (string) $exception->errorInfo[1]
+            : '';
+        $message = strtolower($exception->getMessage());
+
+        return $sqlState === '23505'
+            || ($sqlState === '23000' && $driverCode === '1062')
+            || ($sqlState === '23000'
+                && $driverCode === '19'
+                && strpos($message, 'unique constraint failed') !== false);
     }
 
     public function reservePurchase(Purchase $purchase): WalletEscrowHold
