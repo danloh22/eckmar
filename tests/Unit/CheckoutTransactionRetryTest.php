@@ -480,6 +480,42 @@ class CheckoutTransactionRetryTest extends TestCase
     }
 
     /**
+     * @dataProvider invalidUtf8CheckoutMessageValues
+     */
+    public function testInvalidUtf8PurchaseMessageIsRejectedBeforeRequestKeyBinding($invalidMessage)
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout recovery identity is invalid. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'invalid-utf8-message-purchase-id';
+        $purchase->setAttribute('message', $invalidMessage);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+        $request = new CheckoutRecoveryProbeRequestDouble();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('A non-UTF-8 purchase message must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout recovery identity is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertNull(session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME));
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    /**
      * @dataProvider invalidCheckoutCartEntryValues
      */
     public function testNonPurchaseCartEntryIsRejectedBeforeCloningOrRequestKeyBinding($invalidEntry)
@@ -625,6 +661,15 @@ class CheckoutTransactionRetryTest extends TestCase
             'boolean' => [false],
             'array' => [['buyer message']],
             'object' => [(object) ['message' => 'buyer message']],
+        ];
+    }
+
+    public function invalidUtf8CheckoutMessageValues()
+    {
+        return [
+            'invalid leading byte' => ["\xFF"],
+            'truncated two-byte sequence' => ["\xC3"],
+            'invalid continuation byte' => ["\xC3\x28"],
         ];
     }
 

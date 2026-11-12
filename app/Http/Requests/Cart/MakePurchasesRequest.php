@@ -197,7 +197,9 @@ class MakePurchasesRequest extends FormRequest
             // JSON can otherwise encode arrays/objects into a stable-looking key
             // that the purchase encryption path was never designed to process.
             $message = $item->getAttribute('message');
-            if ($message !== null && !is_string($message)) {
+            if ($message !== null
+                && (!is_string($message) || preg_match('//u', $message) !== 1)
+            ) {
                 throw new RequestException(
                     'Checkout recovery identity is invalid. Please rebuild your cart.'
                 );
