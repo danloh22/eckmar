@@ -591,6 +591,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("'version' => 1", binding)
         self.assertIn("hash('sha256', $encoded)", binding)
         self.assertIn("hash_equals($storedKey, $requestKey)", binding)
+        self.assertIn("isCanonicalCheckoutRequestKey($storedKey)", binding)
         self.assertIn("Checkout request identity changed.", binding)
         self.assertEqual(
             4,
@@ -604,6 +605,10 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("testCheckoutRequestKeyIsStableAndBuyerBound", checkout_tests)
         self.assertIn(
             "testChangedCheckoutRequestKeyFailsBeforeRecoveryOrLedgerWork",
+            checkout_tests,
+        )
+        self.assertIn(
+            "testMalformedStoredCheckoutRequestKeyFailsBeforeRecoveryOrLedgerWork",
             checkout_tests,
         )
 

@@ -103,6 +103,62 @@ class CheckoutTransactionRetryTest extends TestCase
         Event::assertNotDispatched(NewPurchase::class);
     }
 
+    /**
+     * @dataProvider malformedCheckoutRequestKeyValues
+     */
+    public function testMalformedStoredCheckoutRequestKeyFailsBeforeRecoveryOrLedgerWork(
+        $malformedKey
+    ) {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout request identity changed. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'malformed-request-key-purchase-id';
+        $purchase->message = 'buyer message';
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+        session()->put(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME, $malformedKey);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+        $request = new CheckoutRecoveryProbeRequestDouble();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('A malformed checkout request key must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout request identity changed. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        $this->assertSame(
+            $malformedKey,
+            session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME)
+        );
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    public function malformedCheckoutRequestKeyValues()
+    {
+        return [
+            'integer' => [42],
+            'boolean' => [false],
+            'array' => [['request-key']],
+            'object' => [(object) ['request-key' => str_repeat('a', 64)]],
+            'uppercase hex' => [str_repeat('A', 64)],
+            'too short' => [str_repeat('a', 63)],
+            'too long' => [str_repeat('a', 65)],
+            'leading whitespace' => [' ' . str_repeat('a', 64)],
+            'trailing whitespace' => [str_repeat('a', 64) . ' '],
+        ];
+    }
+
     public function testClearingCartAlsoClearsCheckoutRequestKey()
     {
         session()->put(Cart::SESSION_NAME, ['product-id' => new CheckoutPurchaseDouble()]);

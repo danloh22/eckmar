@@ -250,14 +250,26 @@ class MakePurchasesRequest extends FormRequest
             return;
         }
 
-        if (!is_string($storedKey)
-            || preg_match('/\A[a-f0-9]{64}\z/D', $storedKey) !== 1
+        if (!$this->isCanonicalCheckoutRequestKey($storedKey)
             || !hash_equals($storedKey, $requestKey)
         ) {
             throw new RequestException(
                 'Checkout request identity changed. Please rebuild your cart.'
             );
         }
+    }
+
+    /**
+     * Accept only the lowercase SHA-256 representation produced above.
+     *
+     * Session values are untrusted serialized input. Keeping this check behind
+     * one boundary prevents arrays, objects or visually similar noncanonical
+     * strings from reaching hash_equals or being treated as retry identities.
+     */
+    protected function isCanonicalCheckoutRequestKey($value)
+    {
+        return is_string($value)
+            && preg_match('/\A[a-f0-9]{64}\z/D', $value) === 1;
     }
 
     /**
