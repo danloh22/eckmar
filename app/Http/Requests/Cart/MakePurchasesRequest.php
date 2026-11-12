@@ -170,6 +170,7 @@ class MakePurchasesRequest extends FormRequest
                 || $id === ''
                 || trim($id) !== $id
                 || preg_match('//u', $id) !== 1
+                || preg_match('/[\\x00-\\x1F\\x7F]/', $id) === 1
                 || isset($seen[$id])
             ) {
                 throw new RequestException(
@@ -188,6 +189,7 @@ class MakePurchasesRequest extends FormRequest
                     || $value === ''
                     || trim($value) !== $value
                     || preg_match('//u', $value) !== 1
+                    || preg_match('/[\\x00-\\x1F\\x7F]/', $value) === 1
                 ) {
                     throw new RequestException(
                         'Checkout recovery identity is invalid. Please rebuild your cart.'
@@ -219,6 +221,7 @@ class MakePurchasesRequest extends FormRequest
                     || $shippingId === ''
                     || trim($shippingId) !== $shippingId
                     || preg_match('//u', $shippingId) !== 1
+                    || preg_match('/[\\x00-\\x1F\\x7F]/', $shippingId) === 1
                 )
             ) {
                 throw new RequestException(
@@ -233,6 +236,7 @@ class MakePurchasesRequest extends FormRequest
             || $buyerId === ''
             || trim($buyerId) !== $buyerId
             || preg_match('//u', $buyerId) !== 1
+            || preg_match('/[\\x00-\\x1F\\x7F]/', $buyerId) === 1
         ) {
             throw new RequestException(
                 'Checkout recovery identity is invalid. Please rebuild your cart.'
@@ -488,6 +492,7 @@ class MakePurchasesRequest extends FormRequest
                 || $value === ''
                 || trim($value) !== $value
                 || preg_match('//u', $value) !== 1
+                || preg_match('/[\\x00-\\x1F\\x7F]/', $value) === 1
                 || $requested->getAttribute($attribute) !== $value
             ) {
                 return false;
@@ -500,6 +505,7 @@ class MakePurchasesRequest extends FormRequest
                 || $shippingId === ''
                 || trim($shippingId) !== $shippingId
                 || preg_match('//u', $shippingId) !== 1
+                || preg_match('/[\\x00-\\x1F\\x7F]/', $shippingId) === 1
             )
         ) {
             return false;

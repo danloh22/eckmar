@@ -303,6 +303,10 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("!is_string($message) || preg_match('//u', $message) !== 1", guard)
         self.assertIn("$buyerId = $this->currentCheckoutBuyerId();", guard)
         self.assertIn("$item->getAttribute('buyer_id') !== $buyerId", guard)
+        self.assertGreaterEqual(
+            guard.count(r"preg_match('/[\\x00-\\x1F\\x7F]/'"),
+            4,
+        )
         self.assertGreater(
             guard.index("$buyerId = $this->currentCheckoutBuyerId();"),
             guard.index("$seen[$id] = true;"),
@@ -555,6 +559,10 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
 
         self.assertIn("!is_string($value)", identity)
         self.assertIn("trim($value) !== $value", identity)
+        self.assertGreaterEqual(
+            identity.count(r"preg_match('/[\\x00-\\x1F\\x7F]/'"),
+            2,
+        )
         self.assertIn("$shippingId !== null", identity)
         self.assertIn("preg_match('/^[1-9][0-9]*$/D', $quantity)", identity)
         self.assertIn("(string) $integerQuantity !== $quantity", identity)

@@ -640,6 +640,7 @@ class CheckoutTransactionRetryTest extends TestCase
             'integer' => [42],
             'array' => [['purchase-id']],
             'invalid UTF-8' => ["\xFF"],
+            'embedded NUL' => ["purchase\0id"],
         ];
     }
 
@@ -782,6 +783,8 @@ class CheckoutTransactionRetryTest extends TestCase
             'non-string shipping' => ['shipping_id', 42],
             'invalid UTF-8 vendor' => ['vendor_id', "\xFF"],
             'invalid UTF-8 shipping' => ['shipping_id', "\xC3"],
+            'embedded NUL vendor' => ['vendor_id', "vendor\0id"],
+            'embedded control shipping' => ['shipping_id', "shipping\x1Fid"],
         ];
     }
 
@@ -827,6 +830,7 @@ class CheckoutTransactionRetryTest extends TestCase
             'missing authenticated buyer' => [null],
             'different authenticated buyer' => ['other-buyer-id'],
             'invalid UTF-8 authenticated buyer' => ["\xFF"],
+            'embedded NUL authenticated buyer' => ["buyer\0id"],
         ];
     }
 
@@ -1115,6 +1119,8 @@ class CheckoutTransactionRetryTest extends TestCase
             'zero-padded quantity is non-canonical' => ['quantity', 2, '02'],
             'invalid UTF-8 persisted vendor' => ['vendor_id', 'vendor-id', "\xFF"],
             'invalid UTF-8 persisted shipping' => ['shipping_id', null, "\xC3"],
+            'embedded NUL persisted vendor' => ['vendor_id', 'vendor-id', "vendor\0id"],
+            'embedded control persisted shipping' => ['shipping_id', null, "shipping\x1Fid"],
         ];
     }
 
