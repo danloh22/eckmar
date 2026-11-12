@@ -172,7 +172,7 @@ class MakePurchasesRequest extends FormRequest
                 );
             }
             $quantity = $item->getAttribute('quantity');
-            if (!is_int($quantity) || $quantity < 1) {
+            if (!is_int($quantity) || $quantity < 1 || $quantity > 2147483647) {
                 throw new RequestException(
                     'Checkout quantity is invalid. Please rebuild your cart.'
                 );

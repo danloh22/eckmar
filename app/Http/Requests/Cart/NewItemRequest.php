@@ -29,7 +29,10 @@ class NewItemRequest extends FormRequest
     {
         return [
             'delivery' => 'nullable|exists:shippings,id',
-            'amount' => 'numeric|required',
+            // Product stock, offer thresholds and shipping ranges use signed
+            // MySQL INT columns. Reject fractional, non-positive or oversized
+            // quantities before PHP coerces the value into Cart::addToCart().
+            'amount' => 'required|integer|min:1|max:2147483647',
             'message' => 'nullable|string',
             'coin' => ['required' , Rule::in(array_keys(config('coins.coin_list')))],
             'type' => ['required', Rule::in(array_keys(\App\Purchase::$types))],

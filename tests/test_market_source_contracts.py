@@ -288,6 +288,7 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("$item->getAttribute('quantity')", guard)
         self.assertIn("!is_int($quantity)", guard)
         self.assertIn("$quantity < 1", guard)
+        self.assertIn("$quantity > 2147483647", guard)
         self.assertIn("Checkout quantity is invalid", guard)
         self.assertIn(
             "['buyer_id', 'vendor_id', 'offer_id', 'coin_name', 'type']",
@@ -974,6 +975,7 @@ class MessageNotificationSourceContractTest(unittest.TestCase):
         request = (
             self.root / "app/Http/Requests/Cart/NewItemRequest.php"
         ).read_text(encoding="utf-8")
+        self.assertIn("required|integer|min:1|max:2147483647", request)
         self.assertIn("if (!$this->delivery)", request)
         self.assertIn("if (!$shipping)", request)
         self.assertIn("$product -> isPhysical() && $shipping === null", cart)

@@ -651,6 +651,7 @@ class CheckoutTransactionRetryTest extends TestCase
             'numeric string' => ['1'],
             'numeric suffix' => ['1oops'],
             'fractional' => [1.5],
+            'signed database integer overflow' => [2147483648],
         ];
     }
 
