@@ -29,21 +29,14 @@ class ProductBoughtNotification
         $content = 'Your product has been purchased by ['.$event->buyer->username.']';
         $routeName = 'profile.sales.single';
         $routeParams = serialize(['sale'=>$event->purchase->id]);
-        $notifications = $event->vendor->user->notifications();
-
-        // Checkout recovery can replay NewPurchase after the database commit.
-        // Reuse the stable sale route payload as the delivery identity so a
-        // prior notification also suppresses its optional Bitmessage side
-        // effect, which is dispatched by notify().
-        $alreadyDelivered = $notifications
-            ->where('route_name', $routeName)
-            ->where('route_params', $routeParams)
-            ->exists();
-
-        if ($alreadyDelivered) {
-            return;
-        }
-
-        $event->vendor->user->notify($content, $routeName, $routeParams);
+        // Checkout recovery can replay NewPurchase concurrently. The stable
+        // delivery key maps to a deterministic notification primary key, so
+        // exactly one replay persists and dispatches the optional side effect.
+        $event->vendor->user->notifyOnce(
+            'purchase-bought:' . $event->purchase->id,
+            $content,
+            $routeName,
+            $routeParams
+        );
     }
 }

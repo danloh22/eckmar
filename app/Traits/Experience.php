@@ -46,12 +46,16 @@ trait Experience
         return round(100-$progress,0);
     }
     public function grantExperience($value){
-        $this->experience += $value;
-        $this->save();
+        if ($this->increment('experience', $value) !== 1) {
+            throw new \RuntimeException('Unable to persist experience grant.');
+        }
+        $this->refresh();
     }
     public function takeExperience($value){
-        $this->experience -= $value;
-        $this->save();
+        if ($this->decrement('experience', $value) !== 1) {
+            throw new \RuntimeException('Unable to persist experience deduction.');
+        }
+        $this->refresh();
     }
 
     public function getShortXP(){

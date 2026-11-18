@@ -16,6 +16,7 @@ use App\Marketplace\Cart;
 use App\Shipping;
 use App\User;
 use App\Offer;
+use App\Product;
 
 
 use Illuminate\Support\Facades\DB;
@@ -28,18 +29,15 @@ trait Purchasable {
      */
     public function purchased()
     {
-        // check if shipping is not deleted in the mean time
-        // shipping is deleted between adding to cart and checkout
-        if($this->shipping && Shipping::where('id',$this->shipping->id)->where('deleted', '=', 1)->exists()){
-            Cart::getCart()->clearCart(); // clear cart
-            throw new RequestException('Selected shipping is deleted, please add the product again.');
-        }
-
-        $offer = Offer::where('id', $this->offer_id)->lockForUpdate()->firstOrFail();
-        $product = $offer->product()->lockForUpdate()->firstOrFail();
+        list($offer, $product) = $this->lockActiveOfferAndProduct();
         throw_unless($product->active, new RequestException('This product is no longer available.'));
+        $this->validateLockedCheckoutSelection($offer, $product);
+        $shipping = $this->lockAndValidateCheckoutShipping($product);
         $offer->setRelation('product', $product);
         $this->setRelation('offer', $offer);
+        if ($shipping !== null) {
+            $this->setRelation('shipping', $shipping);
+        }
 
         // Generate Payment Service from Service Container
         $this -> payment = app() -> makeWith(\App\Marketplace\Payment\Payment::class, ['purchase' => $this]);
@@ -66,6 +64,115 @@ trait Purchasable {
 
             $this -> delivered_product = implode("\n", $productsToDelivery);
             $this -> save();
+        }
+    }
+
+    /**
+     * Lock checkout inventory in the same Product -> Offer order used by
+     * offer creation and removal. The second offer read closes the gap between
+     * discovering the owning product and acquiring its serialization lock.
+     */
+    protected function lockActiveOfferAndProduct()
+    {
+        if (DB::connection()->transactionLevel() < 1) {
+            throw new \LogicException(
+                'Checkout offer resolution requires an active database transaction.'
+            );
+        }
+
+        $offerReference = Offer::where('id', $this->offer_id)
+            ->select(['id', 'product_id'])
+            ->first();
+        if (!$offerReference) {
+            throw new RequestException('Selected offer is no longer available. Please add the product again.');
+        }
+
+        $product = Product::where('id', $offerReference->product_id)
+            ->lockForUpdate()
+            ->first();
+        if (!$product) {
+            throw new RequestException('Selected offer is no longer available. Please add the product again.');
+        }
+
+        $offer = Offer::where('id', $this->offer_id)
+            ->where('product_id', $product->id)
+            ->where('deleted', '=', 0)
+            ->lockForUpdate()
+            ->first();
+        if (!$offer) {
+            throw new RequestException('Selected offer is no longer available. Please add the product again.');
+        }
+
+        return [$offer, $product];
+    }
+
+    /**
+     * Revalidate session selections against the rows held by checkout locks.
+     */
+    protected function validateLockedCheckoutSelection(Offer $offer, Product $product)
+    {
+        if (!$product->supportsCoin($this->coin_name)) {
+            throw new RequestException(
+                'Selected coin is no longer supported by this product. Please add the product again.'
+            );
+        }
+        if (!in_array($this->type, $product->getTypes(), true)) {
+            throw new RequestException(
+                'Selected purchase type is no longer supported by this product. Please add the product again.'
+            );
+        }
+        if ((int) $offer->min_quantity > $this->quantity) {
+            throw new RequestException(
+                'Selected offer no longer applies to this quantity. Please add the product again.'
+            );
+        }
+    }
+
+    /**
+     * Reload and lock the selected shipping row after the owning product lock.
+     * Session relations may be stale when shipping is deleted, moved to another
+     * product, or its quantity range changes before checkout.
+     */
+    protected function lockAndValidateCheckoutShipping(Product $product)
+    {
+        $shippingId = $this->getAttribute('shipping_id');
+        $this->validateLockedCheckoutShippingPresence($product, $shippingId);
+        if ($shippingId === null) {
+            return null;
+        }
+
+        $shipping = Shipping::where('id', $shippingId)
+            ->where('product_id', $product->id)
+            ->where('deleted', '=', 0)
+            ->lockForUpdate()
+            ->first();
+        if (!$shipping) {
+            throw new RequestException(
+                'Selected shipping is no longer available. Please add the product again.'
+            );
+        }
+
+        $this->validateLockedCheckoutShipping($shipping);
+
+        return $shipping;
+    }
+
+    protected function validateLockedCheckoutShippingPresence(Product $product, $shippingId)
+    {
+        if ($product->isPhysical() && $shippingId === null) {
+            throw new RequestException(
+                'A shipping option is required for physical products. Please add the product again.'
+            );
+        }
+    }
+
+    protected function validateLockedCheckoutShipping(Shipping $shipping)
+    {
+        if ($shipping->from_quantity > $this->quantity
+            || $shipping->to_quantity < $this->quantity) {
+            throw new RequestException(
+                'Selected shipping no longer applies to this quantity. Please add the product again.'
+            );
         }
     }
 

@@ -21,6 +21,14 @@ class ProductDisputeResolvedNotificationTest extends TestCase
 
         $this->assertSame(1, $buyer->notificationsSent);
         $this->assertSame(1, $vendor->notificationsSent);
+        $this->assertSame(
+            'dispute-resolved-buyer:' . $purchase->id,
+            $buyer->lastDeliveryKey
+        );
+        $this->assertSame(
+            'dispute-resolved-vendor:' . $purchase->id,
+            $vendor->lastDeliveryKey
+        );
         $this->assertSame([
             'Dispute for your purchase is now resolved',
             'profile.purchases.single',
@@ -31,16 +39,6 @@ class ProductDisputeResolvedNotificationTest extends TestCase
             'profile.sales.single',
             serialize(['sale' => $purchase->id]),
         ], $vendor->lastNotification);
-        $this->assertSame([
-            ['description', 'Dispute for your purchase is now resolved'],
-            ['route_name', 'profile.purchases.single'],
-            ['route_params', serialize(['purchase' => $purchase->id])],
-        ], $buyer->lastNotificationQuery->filters);
-        $this->assertSame([
-            ['description', 'Dispute for your sale is now resolved'],
-            ['route_name', 'profile.sales.single'],
-            ['route_params', serialize(['sale' => $purchase->id])],
-        ], $vendor->lastNotificationQuery->filters);
     }
 
     public function testRecoveryReplayAfterPostPersistFailureDoesNotDuplicateResolvedDisputeNotification()
@@ -97,69 +95,31 @@ class ProductDisputeResolvedNotificationTest extends TestCase
 class ProductDisputeResolvedNotificationUserDouble extends User
 {
     public $failAfterPersisting = false;
+    public $lastDeliveryKey;
     public $lastNotification = [];
-    public $lastNotificationQuery;
     public $notificationsSent = 0;
-    public $persistedNotifications = [];
+    public $persistedDeliveryKeys = [];
 
-    public function notifications()
-    {
-        $this->lastNotificationQuery = new ProductDisputeResolvedNotificationQueryDouble($this);
+    public function notifyOnce(
+        string $deliveryKey,
+        string $content,
+        ?string $routeName = null,
+        ?string $routeParams = null
+    ): bool {
+        $this->lastDeliveryKey = $deliveryKey;
 
-        return $this->lastNotificationQuery;
-    }
+        if (in_array($deliveryKey, $this->persistedDeliveryKeys, true)) {
+            return false;
+        }
 
-    public function notify($content, $routeName = null, $routeParams = null)
-    {
+        $this->persistedDeliveryKeys[] = $deliveryKey;
         $this->notificationsSent++;
         $this->lastNotification = [$content, $routeName, $routeParams];
-        $this->persistedNotifications[] = [
-            'description' => $content,
-            'route_name' => $routeName,
-            'route_params' => $routeParams,
-        ];
 
         if ($this->failAfterPersisting) {
             throw new \RuntimeException('post-persistence side effect failed');
         }
-    }
-}
 
-class ProductDisputeResolvedNotificationQueryDouble
-{
-    public $filters = [];
-    private $user;
-
-    public function __construct(ProductDisputeResolvedNotificationUserDouble $user)
-    {
-        $this->user = $user;
-    }
-
-    public function where($column, $value)
-    {
-        $this->filters[] = [$column, $value];
-
-        return $this;
-    }
-
-    public function exists()
-    {
-        foreach ($this->user->persistedNotifications as $notification) {
-            $matches = true;
-
-            foreach ($this->filters as $filter) {
-                if (!array_key_exists($filter[0], $notification)
-                    || $notification[$filter[0]] !== $filter[1]) {
-                    $matches = false;
-                    break;
-                }
-            }
-
-            if ($matches) {
-                return true;
-            }
-        }
-
-        return false;
+        return true;
     }
 }

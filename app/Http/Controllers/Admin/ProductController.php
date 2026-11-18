@@ -187,8 +187,9 @@ class ProductController extends Controller
     }
     
     
-    public function markAsFeatured(Product $product){
+    public function markAsFeatured($product){
         $this -> checkProducts();
+        $product = Product::findOrFail($product);
         $product->featured = 1;
         $product->save();
         return redirect()->back();

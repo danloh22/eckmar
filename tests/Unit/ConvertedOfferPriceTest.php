@@ -41,6 +41,7 @@ class ConvertedOfferPriceTest extends TestCase
             $this->assertSame(3, $existing->price);
         } finally {
             $connection->getSchemaBuilder()->drop('offers');
+            $connection->getSchemaBuilder()->drop('products');
         }
     }
 
@@ -78,6 +79,7 @@ class ConvertedOfferPriceTest extends TestCase
             }
         } finally {
             $connection->getSchemaBuilder()->drop('offers');
+            $connection->getSchemaBuilder()->drop('products');
         }
     }
 
@@ -140,11 +142,21 @@ class ConvertedOfferPriceTest extends TestCase
         $this->assertSame('sqlite', $connection->getConfig('driver'));
         $this->assertSame(':memory:', $connection->getConfig('database'));
         $this->assertSame($connection, (new Offer())->getConnection());
+        $connection->getSchemaBuilder()->create('products', function (Blueprint $table) {
+            $table->string('id')->primary();
+            $table->timestamps();
+        });
+        $connection->table('products')->insert([
+            'id' => 'conversion-product',
+            'created_at' => '2026-10-26 00:00:00',
+            'updated_at' => '2026-10-26 00:00:00',
+        ]);
         $connection->getSchemaBuilder()->create('offers', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->string('product_id');
             $table->integer('min_quantity');
             $table->decimal('price', 16, 2);
+            $table->boolean('deleted')->default(false);
             $table->timestamps();
         });
         return $connection;

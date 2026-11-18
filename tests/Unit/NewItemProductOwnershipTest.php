@@ -27,4 +27,27 @@ class NewItemProductOwnershipTest extends TestCase
         $this->expectException(RequestException::class);
         (new NewItemRequest())->persist($product);
     }
+
+    public function testPhysicalProductRequiresShippingBeforeCartMutation()
+    {
+        $buyer = new User();
+        $buyer->id = 'buyer-id';
+
+        $product = new NewItemPhysicalProductProbe();
+        $product->user_id = 'vendor-id';
+
+        $this->actingAs($buyer);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage('A shipping option is required for physical products!');
+        (new NewItemRequest())->persist($product);
+    }
+}
+
+class NewItemPhysicalProductProbe extends Product
+{
+    public function isPhysical()
+    {
+        return true;
+    }
 }

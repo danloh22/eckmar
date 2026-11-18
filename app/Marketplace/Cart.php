@@ -19,6 +19,7 @@ use App\Vendor;
 class Cart
 {
     const SESSION_NAME = 'cart_items';
+    const CHECKOUT_REQUEST_KEY_SESSION_NAME = 'checkout_request_key';
 
     /**
      * Static instance of the cart
@@ -79,6 +80,8 @@ class Cart
      */
     public function addToCart(Product $product, int $quantity, string $coin, ?Shipping $shipping = null, string $message = null, $type = 'normal')
     {
+        if($product -> isPhysical() && $shipping === null)
+            throw new RequestException('A shipping option is required for physical products!');
         // validate shipping
         if(!$this -> validShipping($shipping, $quantity))
             throw new RequestException('Quantity must be in range of selected shipping option!');
@@ -88,6 +91,9 @@ class Cart
         // validate coins
         if(!$product -> supportsCoin($coin))
             throw new RequestException('Selected coin payment is not supported by this product!');
+        // validate purchase type, including runtime-disabled Finalize Early
+        if(!in_array($type, $product -> getTypes(), true))
+            throw new RequestException('Selected purchase type is not supported by this product!');
 
         // make the purchase
         $newCartItem = new Purchase;
@@ -110,6 +116,9 @@ class Cart
         $itemsTable[$product -> id] = $newCartItem;
         // save to table
         session() -> put(self::SESSION_NAME, $itemsTable);
+        // A request key represents one exact cart snapshot. Any successful
+        // mutation must force checkout to bind a fresh snapshot.
+        session() -> forget(self::CHECKOUT_REQUEST_KEY_SESSION_NAME);
 
     }
 
@@ -137,6 +146,7 @@ class Cart
         unset($cartItems[$product -> id]);
 
         session() -> put(self::SESSION_NAME, $cartItems);
+        session() -> forget(self::CHECKOUT_REQUEST_KEY_SESSION_NAME);
     }
 
     /**
@@ -173,7 +183,10 @@ class Cart
      */
     public function clearCart()
     {
-        session() -> forget(self::SESSION_NAME);
+        session() -> forget([
+            self::SESSION_NAME,
+            self::CHECKOUT_REQUEST_KEY_SESSION_NAME,
+        ]);
     }
 
 }
