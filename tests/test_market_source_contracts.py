@@ -567,6 +567,10 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
             source.count(r"preg_match('/\\p{C}/u'"),
             6,
         )
+        self.assertGreaterEqual(
+            source.count(r"preg_match('/\\p{Z}/u'"),
+            6,
+        )
         self.assertIn("$shippingId !== null", identity)
         self.assertIn("preg_match('/^[1-9][0-9]*$/D', $quantity)", identity)
         self.assertIn("(string) $integerQuantity !== $quantity", identity)
@@ -587,6 +591,9 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("embedded Unicode format vendor", checkout_tests)
         self.assertIn("embedded Unicode format authenticated buyer", checkout_tests)
         self.assertIn("embedded Unicode format persisted vendor", checkout_tests)
+        self.assertIn("embedded Unicode separator vendor", checkout_tests)
+        self.assertIn("embedded Unicode separator authenticated buyer", checkout_tests)
+        self.assertIn("embedded Unicode separator persisted vendor", checkout_tests)
 
     def test_checkout_request_key_is_buyer_bound_and_rotated_by_cart_mutations(self):
         request = (
