@@ -172,6 +172,7 @@ class MakePurchasesRequest extends FormRequest
                 || preg_match('//u', $id) !== 1
                 || preg_match('/[\\x00-\\x1F\\x7F]/', $id) === 1
                 || preg_match('/\\p{C}/u', $id) === 1
+                || preg_match('/\\p{Z}/u', $id) === 1
                 || strlen($id) > 36
                 || isset($seen[$id])
             ) {
@@ -193,6 +194,7 @@ class MakePurchasesRequest extends FormRequest
                     || preg_match('//u', $value) !== 1
                     || preg_match('/[\\x00-\\x1F\\x7F]/', $value) === 1
                     || preg_match('/\\p{C}/u', $value) === 1
+                || preg_match('/\\p{Z}/u', $value) === 1
                     || strlen($value) > 36
                 ) {
                     throw new RequestException(
@@ -227,6 +229,7 @@ class MakePurchasesRequest extends FormRequest
                     || preg_match('//u', $shippingId) !== 1
                     || preg_match('/[\\x00-\\x1F\\x7F]/', $shippingId) === 1
                     || preg_match('/\\p{C}/u', $shippingId) === 1
+                || preg_match('/\\p{Z}/u', $shippingId) === 1
                     || strlen($shippingId) > 36
                 )
             ) {
@@ -244,6 +247,7 @@ class MakePurchasesRequest extends FormRequest
             || preg_match('//u', $buyerId) !== 1
             || preg_match('/[\\x00-\\x1F\\x7F]/', $buyerId) === 1
             || preg_match('/\\p{C}/u', $buyerId) === 1
+                || preg_match('/\\p{Z}/u', $buyerId) === 1
             || strlen($buyerId) > 36
         ) {
             throw new RequestException(
@@ -502,6 +506,7 @@ class MakePurchasesRequest extends FormRequest
                 || preg_match('//u', $value) !== 1
                 || preg_match('/[\\x00-\\x1F\\x7F]/', $value) === 1
                 || preg_match('/\\p{C}/u', $value) === 1
+                || preg_match('/\\p{Z}/u', $value) === 1
                 || strlen($value) > 36
                 || $requested->getAttribute($attribute) !== $value
             ) {
@@ -517,6 +522,7 @@ class MakePurchasesRequest extends FormRequest
                 || preg_match('//u', $shippingId) !== 1
                 || preg_match('/[\\x00-\\x1F\\x7F]/', $shippingId) === 1
                 || preg_match('/\\p{C}/u', $shippingId) === 1
+                || preg_match('/\\p{Z}/u', $shippingId) === 1
                 || strlen($shippingId) > 36
             )
         ) {
