@@ -642,6 +642,7 @@ class CheckoutTransactionRetryTest extends TestCase
             'invalid UTF-8' => ["\xFF"],
             'embedded NUL' => ["purchase\0id"],
             'embedded Unicode format character' => ["purchase\u{200D}id"],
+            'embedded Unicode separator character' => ["purchase\u{00A0}id"],
             'longer than UUID column' => [str_repeat('p', 37)],
         ];
     }
@@ -789,6 +790,8 @@ class CheckoutTransactionRetryTest extends TestCase
             'embedded control shipping' => ['shipping_id', "shipping\x1Fid"],
             'embedded Unicode format vendor' => ['vendor_id', "vendor\u{200D}id"],
             'embedded Unicode format shipping' => ['shipping_id', "shipping\u{200D}id"],
+            'embedded Unicode separator vendor' => ['vendor_id', "vendor\u{00A0}id"],
+            'embedded Unicode separator shipping' => ['shipping_id', "shipping\u{2003}id"],
             'vendor longer than UUID column' => ['vendor_id', str_repeat('v', 37)],
             'shipping longer than UUID column' => ['shipping_id', str_repeat('s', 37)],
         ];
@@ -838,6 +841,7 @@ class CheckoutTransactionRetryTest extends TestCase
             'invalid UTF-8 authenticated buyer' => ["\xFF"],
             'embedded NUL authenticated buyer' => ["buyer\0id"],
             'embedded Unicode format authenticated buyer' => ["buyer\u{200D}id"],
+            'embedded Unicode separator authenticated buyer' => ["buyer\u{00A0}id"],
             'authenticated buyer longer than UUID column' => [str_repeat('b', 37)],
         ];
     }
@@ -1131,6 +1135,8 @@ class CheckoutTransactionRetryTest extends TestCase
             'embedded control persisted shipping' => ['shipping_id', null, "shipping\x1Fid"],
             'embedded Unicode format persisted vendor' => ['vendor_id', 'vendor-id', "vendor\u{200D}id"],
             'embedded Unicode format persisted shipping' => ['shipping_id', null, "shipping\u{200D}id"],
+            'embedded Unicode separator persisted vendor' => ['vendor_id', 'vendor-id', "vendor\u{00A0}id"],
+            'embedded Unicode separator persisted shipping' => ['shipping_id', null, "shipping\u{2003}id"],
             'persisted vendor longer than UUID column' => ['vendor_id', 'vendor-id', str_repeat('v', 37)],
             'persisted shipping longer than UUID column' => ['shipping_id', null, str_repeat('s', 37)],
         ];
