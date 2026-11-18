@@ -215,7 +215,12 @@ class MakePurchasesRequest extends FormRequest
             // that the purchase encryption path was never designed to process.
             $message = $item->getAttribute('message');
             if ($message !== null
-                && (!is_string($message) || preg_match('//u', $message) !== 1)
+                && (!is_string($message)
+                    || preg_match('//u', $message) !== 1
+                    // Preserve normal text layout (tab, LF and CR), but reject
+                    // binary C0/DEL bytes before request-key hashing and PGP.
+                    || preg_match('/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]/', $message) === 1
+                )
             ) {
                 throw new RequestException(
                     'Checkout recovery identity is invalid. Please rebuild your cart.'

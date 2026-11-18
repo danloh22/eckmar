@@ -217,3 +217,7 @@ Checkout identity validation additionally rejects Unicode `\\p{C}` code points a
 ## Unicode separator checkout identities — 18 November 2026
 
 Checkout preflight and read-only recovery reject Unicode separator characters in purchase, buyer, vendor, offer, coin, type and optional shipping identities. This includes invisible non-breaking and em spaces that are not removed by PHP's normal `trim()`. The authenticated buyer boundary uses the same rule. PHPUnit data providers exercise requested, authenticated and persisted values before request-key binding, recovery, ledger work or transactions; the source contract requires all six production checks. Visible non-separator Unicode remains accepted. This is defensive validation, not durable cross-session idempotency or a transactional outbox.
+
+## Checkout message binary controls — 18 November 2026
+
+Checkout preflight rejects NUL, non-layout C0 controls and DEL in retained purchase messages before request-key binding, recovery, ledger resolution or transaction work. Tab, line feed and carriage return remain accepted for ordinary formatted buyer text. The PHPUnit provider covers representative forbidden bytes and proves the cart is retained without recovery or side effects; the static contract protects the production guard and its ordering after UTF-8 validation. This remains defensive session validation rather than durable cross-session idempotency or a transactional outbox.

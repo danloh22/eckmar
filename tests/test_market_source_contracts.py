@@ -300,7 +300,8 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("$item->getAttribute('shipping_id')", guard)
         self.assertIn("$shippingId !== null", guard)
         self.assertIn("$message !== null", guard)
-        self.assertIn("!is_string($message) || preg_match('//u', $message) !== 1", guard)
+        self.assertIn("!is_string($message)", guard)
+        self.assertIn("preg_match('//u', $message) !== 1", guard)
         self.assertIn("$buyerId = $this->currentCheckoutBuyerId();", guard)
         self.assertIn("$item->getAttribute('buyer_id') !== $buyerId", guard)
         self.assertGreaterEqual(
@@ -594,6 +595,34 @@ class OfferPersistenceSourceContractTest(unittest.TestCase):
         self.assertIn("embedded Unicode separator vendor", checkout_tests)
         self.assertIn("embedded Unicode separator authenticated buyer", checkout_tests)
         self.assertIn("embedded Unicode separator persisted vendor", checkout_tests)
+
+    def test_checkout_message_rejects_binary_controls_before_request_binding(self):
+        source = (
+            self.root / "app/Http/Requests/Cart/MakePurchasesRequest.php"
+        ).read_text(encoding="utf-8")
+        preflight_start = source.index("$message = $item->getAttribute('message');")
+        preflight_end = source.index("$shippingId = $item->getAttribute('shipping_id');")
+        preflight = source[preflight_start:preflight_end]
+
+        utf8_guard = "preg_match('//u', $message) !== 1"
+        control_guard = (
+            "preg_match('/[\\\\x00-\\\\x08\\\\x0B\\\\x0C"
+            "\\\\x0E-\\\\x1F\\\\x7F]/', $message) === 1"
+        )
+        self.assertIn(utf8_guard, preflight)
+        self.assertIn(control_guard, preflight)
+        self.assertLess(preflight.index(utf8_guard), preflight.index(control_guard))
+
+        checkout_tests = (
+            self.root / "tests/Unit/CheckoutTransactionRetryTest.php"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "testUnsafeControlPurchaseMessageIsRejectedBeforeRequestKeyBinding",
+            checkout_tests,
+        )
+        self.assertIn("'NUL' => [\"buyer\\0message\"]", checkout_tests)
+        self.assertIn("'vertical tab' => [\"buyer\\x0Bmessage\"]", checkout_tests)
+        self.assertIn("'DEL' => [\"buyer\\x7Fmessage\"]", checkout_tests)
 
     def test_checkout_request_key_is_buyer_bound_and_rotated_by_cart_mutations(self):
         request = (

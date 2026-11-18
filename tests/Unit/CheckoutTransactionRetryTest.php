@@ -516,6 +516,42 @@ class CheckoutTransactionRetryTest extends TestCase
     }
 
     /**
+     * @dataProvider unsafeControlCheckoutMessageValues
+     */
+    public function testUnsafeControlPurchaseMessageIsRejectedBeforeRequestKeyBinding($invalidMessage)
+    {
+        Event::fake([NewPurchase::class]);
+        Log::shouldReceive('error')->once()->with(
+            'Checkout recovery identity is invalid. Please rebuild your cart.'
+        );
+
+        $purchase = new CheckoutPurchaseDouble();
+        $purchase->id = 'invalid-control-message-purchase-id';
+        $purchase->setAttribute('message', $invalidMessage);
+        session()->put(Cart::SESSION_NAME, ['product-id' => $purchase]);
+
+        $ledger = Mockery::mock(WalletLedgerService::class);
+        $ledger->shouldNotReceive('reservePurchase');
+        DB::shouldReceive('transaction')->never();
+        $request = new CheckoutRecoveryProbeRequestDouble();
+
+        try {
+            $request->persist($ledger);
+            $this->fail('A control-bearing purchase message must be rejected.');
+        } catch (RequestException $exception) {
+            $this->assertSame(
+                'Checkout recovery identity is invalid. Please rebuild your cart.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(0, $request->recoveryCalls);
+        $this->assertNull(session()->get(Cart::CHECKOUT_REQUEST_KEY_SESSION_NAME));
+        $this->assertSame($purchase, session()->get(Cart::SESSION_NAME)['product-id']);
+        Event::assertNotDispatched(NewPurchase::class);
+    }
+
+    /**
      * @dataProvider invalidCheckoutCartEntryValues
      */
     public function testNonPurchaseCartEntryIsRejectedBeforeCloningOrRequestKeyBinding($invalidEntry)
@@ -676,6 +712,17 @@ class CheckoutTransactionRetryTest extends TestCase
             'invalid leading byte' => ["\xFF"],
             'truncated two-byte sequence' => ["\xC3"],
             'invalid continuation byte' => ["\xC3\x28"],
+        ];
+    }
+
+    public function unsafeControlCheckoutMessageValues()
+    {
+        return [
+            'NUL' => ["buyer\0message"],
+            'backspace' => ["buyer\x08message"],
+            'vertical tab' => ["buyer\x0Bmessage"],
+            'unit separator' => ["buyer\x1Fmessage"],
+            'DEL' => ["buyer\x7Fmessage"],
         ];
     }
 
